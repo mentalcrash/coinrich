@@ -6,7 +6,9 @@ from unittest.mock import patch
 from coinrich.service.upbit_api import UpbitAPI
 from coinrich.models.market import MarketList
 from coinrich.models.ticker import Ticker, TickerList, ChangeType
-
+from coinrich.models.candle import SecondCandle, SecondCandleList
+import requests
+import json
 class TestUpbitAPI:
     
     def setup_method(self):
@@ -241,4 +243,115 @@ class TestUpbitAPI:
         
         # 에러 발생 검증
         with pytest.raises(Exception):
-            self.api.get_markets() 
+            self.api.get_markets()
+
+    @responses.activate
+    def test_get_second_candles_basic(self):
+        """기본 초봉 조회 테스트"""
+        # 목 응답 데이터 설정
+        mock_response = [
+            {
+                "market": "KRW-BTC",
+                "candle_date_time_utc": "2023-01-01T00:00:00",
+                "candle_date_time_kst": "2023-01-01T09:00:00",
+                "opening_price": 20000000.0,
+                "high_price": 20100000.0,
+                "low_price": 19900000.0,
+                "trade_price": 20050000.0,
+                "timestamp": 1672531200000,
+                "candle_acc_trade_price": 5000000.0,
+                "candle_acc_trade_volume": 0.25
+            },
+            {
+                "market": "KRW-BTC",
+                "candle_date_time_utc": "2023-01-01T00:00:01",
+                "candle_date_time_kst": "2023-01-01T09:00:01",
+                "opening_price": 20050000.0,
+                "high_price": 20150000.0,
+                "low_price": 20000000.0,
+                "trade_price": 20100000.0,
+                "timestamp": 1672531201000,
+                "candle_acc_trade_price": 6000000.0,
+                "candle_acc_trade_volume": 0.3
+            }
+        ]
+        
+        # Mock API 응답 설정
+        responses.add(
+            responses.GET,
+            f"{self.base_url}/candles/seconds",
+            json=mock_response,
+            status=200
+        )
+        
+        # API 호출
+        candles = self.api.get_second_candles("KRW-BTC")
+        
+        # 결과 검증
+        assert isinstance(candles, SecondCandleList)
+        assert len(candles) == 2
+        assert candles[0].market == "KRW-BTC"
+        assert candles[0].opening_price == 20000000.0
+        assert candles[0].trade_price == 20050000.0
+        assert candles[1].high_price == 20150000.0
+        
+    @responses.activate
+    def test_get_second_candles_with_params(self):
+        """파라미터를 사용한 초봉 조회 테스트"""
+        # 목 응답 데이터 설정
+        mock_response = [
+            {
+                "market": "KRW-BTC",
+                "candle_date_time_utc": "2023-01-01T00:00:00",
+                "candle_date_time_kst": "2023-01-01T09:00:00",
+                "opening_price": 20000000.0,
+                "high_price": 20100000.0,
+                "low_price": 19900000.0,
+                "trade_price": 20050000.0,
+                "timestamp": 1672531200000,
+                "candle_acc_trade_price": 5000000.0,
+                "candle_acc_trade_volume": 0.25
+            }
+        ]
+        
+        # 파라미터 검증을 위한 함수
+        def request_callback(request):
+            params = request.params
+            assert params.get('market') == 'KRW-BTC'
+            assert params.get('to') == '2023-01-01T00:00:00Z'
+            assert params.get('count') == '1'
+            return (200, {}, json.dumps(mock_response))
+        
+        # Mock API 응답 설정
+        responses.add_callback(
+            responses.GET,
+            f"{self.base_url}/candles/seconds",
+            callback=request_callback,
+            content_type='application/json',
+        )
+        
+        # API 호출
+        candles = self.api.get_second_candles(
+            market="KRW-BTC",
+            to="2023-01-01T00:00:00Z",
+            count=1
+        )
+        
+        # 결과 검증
+        assert isinstance(candles, SecondCandleList)
+        assert len(candles) == 1
+        
+    @responses.activate
+    def test_get_second_candles_error(self):
+        """초봉 조회 에러 테스트"""
+        # Mock API 오류 응답 설정
+        responses.add(
+            responses.GET,
+            f"{self.base_url}/candles/seconds",
+            json={"error": {"message": "Invalid market", "name": "invalid_request"}},
+            status=400
+        )
+        
+        # API 호출 시 예외 발생 확인
+        with pytest.raises(requests.exceptions.HTTPError):
+            self.api.get_second_candles("INVALID-MARKET") 

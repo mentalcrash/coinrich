@@ -5,10 +5,11 @@ import hashlib
 import requests
 from urllib.parse import urlencode
 from dotenv import load_dotenv
-from typing import List, Union
+from typing import List, Union, Optional
 
 from coinrich.models.market import MarketList
 from coinrich.models.ticker import Ticker, TickerList
+from coinrich.models.candle import SecondCandle, SecondCandleList
 
 load_dotenv()
 
@@ -70,6 +71,42 @@ class UpbitAPI:
         if len(data) == 1:
             return Ticker(**data[0])
         return TickerList(root=data)
+    
+    def get_second_candles(
+        self, 
+        market: str, 
+        to: Optional[str] = None, 
+        count: int = 200
+    ) -> SecondCandleList:
+        """초 캔들 조회
+        
+        Args:
+            market: 마켓 코드 (예: KRW-BTC)
+            unit: 초 단위 (기본값: 1, 가능한 값: 1, 10, 60)
+            to: 마지막 캔들 시각 (exclusive). 형식: yyyy-MM-dd'T'HH:mm:ss'Z' or yyyy-MM-dd HH:mm:ss
+            count: 캔들 개수 (최대 200개까지)
+            
+        Returns:
+            초 캔들 목록을 담은 SecondCandleList 객체
+            
+        Raises:
+            HTTPError: API 호출 중 오류 발생 시
+        """
+        url = f"{self.BASE_URL}/candles/seconds"
+        
+        params = {
+            'market': market,
+            'count': count
+        }
+        
+        if to:
+            params['to'] = to
+            
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+            
+        return SecondCandleList(root=data)
     
     def get_candles(self, market, unit=1, count=200):
         """분 캔들 조회"""
