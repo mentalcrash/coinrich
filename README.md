@@ -14,6 +14,7 @@ Upbit API를 활용한 암호화폐 트레이딩 봇 프로젝트
 - 추세장/횡보장 판별 기능
 - 백테스팅 시스템 및 성과 분석
 - 적응형 트레이딩 전략 구현
+- 추세장/횡보장 파라미터 최적화 도구
 
 ## 설치 방법
 
@@ -78,6 +79,9 @@ fresh_candles = service.get_minute_candles("KRW-BTC", unit=5, count=10, use_cach
 
 # 캐시 삭제
 service.clear_cache(market="KRW-BTC", unit=5)
+
+# 대량 데이터 요청 (200개 초과도 자동 처리)
+large_data = service.get_minute_candles("KRW-BTC", unit=15, count=1000)
 ```
 
 ### 차트 시각화
@@ -158,6 +162,24 @@ trending, _, _ = is_trending_market(df, adx_threshold=25, bb_width_percentile=70
 print(f"현재 추세장 여부: {trending.iloc[-1]}")
 ```
 
+### 추세장/횡보장 분석 도구 사용
+
+추세장/횡보장 판별을 위한 ADX 임계값, 볼린저 밴드 폭 백분위수 등 최적의 파라미터를 찾기 위한 도구입니다.
+
+```bash
+# 기본 분석 (BTC, 15분봉, 파라미터 기본값)
+python trend_analyzer.py
+
+# 파라미터 변경하여 분석
+python trend_analyzer.py --market KRW-BTC --unit 30 --count 800 --adx-threshold 20 --bb-percentile 65
+
+# 여러 종목 분석
+python trend_analyzer.py --market KRW-ETH --unit 60
+python trend_analyzer.py --market KRW-XRP --adx-threshold 30
+```
+
+결과는 `charts` 디렉토리에 자동 저장되며, 파라미터 정보와 분석 결과를 포함한 차트가 생성됩니다. 이를 통해 다양한 파라미터로 시험하며 최적의 추세장/횡보장 판별 파라미터를 찾을 수 있습니다.
+
 ### 백테스팅 시스템 사용
 
 ```python
@@ -219,6 +241,7 @@ python test_candle_service.py    # 캔들 서비스 및 캐싱 테스트
 python test_chart.py             # 차트 시각화 테스트
 python test_indicators.py        # 기술적 지표 테스트
 python test_backtest.py          # 백테스팅 및 전략 테스트
+python trend_analyzer.py         # 추세장/횡보장 분석 도구
 ```
 
 ## 프로젝트 구조
@@ -266,6 +289,7 @@ coinrich/
 - 매수/매도 포인트 시각화
 - 수익률 및 성과 지표 계산
 - 시장 상태 시각화 (배경색 구분)
+- 추세장/횡보장 파라미터 최적화 도구
 
 ## 추가 예정 기능
 
