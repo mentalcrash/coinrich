@@ -9,7 +9,7 @@ from coinrich.backtest.backtest import Backtest
 
 def test_adaptive_strategy():
     """적응형 포지션 전략 백테스팅 테스트"""
-    print("\n=== 적응형 포지션 전략 백테스팅 ===")
+    print("\n=== Adaptive Position Strategy Backtest ===")
     
     # 데이터 가져오기
     service = CandleService()
@@ -73,17 +73,17 @@ def test_adaptive_strategy():
     
     # 시장 유형별 성과 분석
     trade_stats = result.trade_statistics()
-    print("\n=== 시장 유형별 성과 ===")
-    print(f"전체 거래 수: {trade_stats['total_trades']}")
-    print(f"전체 승률: {trade_stats['win_rate']*100:.1f}%")
+    print("\n=== Performance by Market Type ===")
+    print(f"Total trades: {trade_stats['total_trades']}")
+    print(f"Overall win rate: {trade_stats['win_rate']*100:.1f}%")
     
     if 'trending_win_rate' in trade_stats:
-        print(f"추세장 승률: {trade_stats['trending_win_rate']*100:.1f}%")
-        print(f"추세장 평균 수익률: {trade_stats['trending_avg_return']*100:.2f}%")
+        print(f"Trending market win rate: {trade_stats['trending_win_rate']*100:.1f}%")
+        print(f"Trending market avg return: {trade_stats['trending_avg_return']*100:.2f}%")
     
     if 'ranging_win_rate' in trade_stats:
-        print(f"횡보장 승률: {trade_stats['ranging_win_rate']*100:.1f}%")
-        print(f"횡보장 평균 수익률: {trade_stats['ranging_avg_return']*100:.2f}%")
+        print(f"Ranging market win rate: {trade_stats['ranging_win_rate']*100:.1f}%")
+        print(f"Ranging market avg return: {trade_stats['ranging_avg_return']*100:.2f}%")
     
     # 결과 시각화
     chart = backtest.visualize(result, df_result)

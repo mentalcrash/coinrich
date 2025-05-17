@@ -108,29 +108,29 @@ class BacktestResult:
     
     def summary(self) -> str:
         """백테스트 결과 요약 문자열 반환"""
-        summary_text = "=== 백테스트 결과 요약 ===\n"
-        summary_text += f"초기 자본: {self.initial_equity:,.0f}\n"
-        summary_text += f"최종 자본: {self.final_equity:,.0f}\n"
-        summary_text += f"총 수익률: {self.total_return*100:.2f}%\n"
-        summary_text += f"연간 수익률: {self.annual_return*100:.2f}%\n"
-        summary_text += f"샤프 비율: {self.sharpe_ratio:.2f}\n"
-        summary_text += f"최대 낙폭: {self.max_drawdown*100:.2f}%\n"
-        summary_text += f"거래 횟수: {self.num_trades}\n"
-        summary_text += f"승률: {self.win_rate*100:.2f}%\n"
-        summary_text += f"평균 수익률: {self.avg_return*100:.2f}%\n"
-        summary_text += f"평균 수익 거래: {self.avg_win*100:.2f}%\n"
-        summary_text += f"평균 손실 거래: {self.avg_loss*100:.2f}%\n"
-        summary_text += f"손익비: {self.profit_factor:.2f}\n"
-        summary_text += f"평균 보유 기간: {self.avg_holding_period:.1f}분\n"
+        summary_text = "=== Backtest Summary ===\n"
+        summary_text += f"Initial Capital: {self.initial_equity:,.0f}\n"
+        summary_text += f"Final Capital: {self.final_equity:,.0f}\n"
+        summary_text += f"Total Return: {self.total_return*100:.2f}%\n"
+        summary_text += f"Annual Return: {self.annual_return*100:.2f}%\n"
+        summary_text += f"Sharpe Ratio: {self.sharpe_ratio:.2f}\n"
+        summary_text += f"Max Drawdown: {self.max_drawdown*100:.2f}%\n"
+        summary_text += f"Number of Trades: {self.num_trades}\n"
+        summary_text += f"Win Rate: {self.win_rate*100:.2f}%\n"
+        summary_text += f"Average Return: {self.avg_return*100:.2f}%\n"
+        summary_text += f"Average Win: {self.avg_win*100:.2f}%\n"
+        summary_text += f"Average Loss: {self.avg_loss*100:.2f}%\n"
+        summary_text += f"Profit Factor: {self.profit_factor:.2f}\n"
+        summary_text += f"Average Holding Period: {self.avg_holding_period:.1f} min\n"
         
         return summary_text
     
     def trade_summary(self) -> str:
         """거래 내역 요약 문자열 반환"""
         if not self.trades:
-            return "거래 내역 없음"
+            return "No trades found"
         
-        summary_text = "=== 거래 내역 요약 ===\n"
+        summary_text = "=== Trade History ===\n"
         
         for i, trade in enumerate(self.trades, 1):
             entry_time = trade['entry_date'].strftime('%Y-%m-%d %H:%M')
@@ -139,8 +139,8 @@ class BacktestResult:
             market_state = f"{trade['market_state']} → {trade['exit_market_state']}"
             profit_text = f"{trade['pnl_pct']*100:+.2f}%"
             
-            summary_text += f"#{i}: {entry_time} 매수 → {exit_time} 매도, "
-            summary_text += f"수익률: {profit_text}, 시장: {market_state}\n"
+            summary_text += f"#{i}: {entry_time} Buy → {exit_time} Sell, "
+            summary_text += f"Return: {profit_text}, Market: {market_state}\n"
         
         return summary_text
     

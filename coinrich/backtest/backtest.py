@@ -165,7 +165,7 @@ class Backtest:
             chart: 생성된 차트 객체
         """
         # 캔들 차트 생성
-        chart = CandleChart(title="적응형 전략 백테스트", style="korean")
+        chart = CandleChart(title="Adaptive Strategy Backtest", style="korean")
         chart.plot(self.data)
         
         # 이동평균선 추가
@@ -204,10 +204,10 @@ class Backtest:
         
         # 백테스트 정보 텍스트 추가
         info_text = (
-            f"총 수익률: {result.total_return*100:.1f}%\n"
-            f"최대 낙폭: {result.max_drawdown*100:.1f}%\n"
-            f"거래 수: {result.num_trades}\n"
-            f"승률: {result.win_rate*100:.1f}%"
+            f"Total Return: {result.total_return*100:.1f}%\n"
+            f"Max Drawdown: {result.max_drawdown*100:.1f}%\n"
+            f"Trades: {result.num_trades}\n"
+            f"Win Rate: {result.win_rate*100:.1f}%"
         )
         chart.axes[0].text(0.02, 0.05, info_text, transform=chart.axes[0].transAxes, 
                           fontsize=10, bbox=dict(facecolor='white', alpha=0.7))
@@ -215,7 +215,7 @@ class Backtest:
         # 자산 가치 패널 추가
         equity_ax = chart.fig.add_axes([0.1, 0.05, 0.8, 0.15])
         equity_ax.plot(result.equity, color='blue', linewidth=1.5)
-        equity_ax.set_title('자산 가치 추이')
+        equity_ax.set_title('Equity Curve')
         equity_ax.grid(True, alpha=0.3)
         
         # 차트 저장
