@@ -14,7 +14,7 @@ def test_adaptive_strategy():
     
     # 데이터 가져오기
     service = CandleService()
-    candles = service.get_minute_candles("KRW-BTC", unit=15, count=200)
+    candles = service.get_minute_candles("KRW-BTC", unit=15, count=400)
     
     # DataFrame으로 변환
     candle_data = []

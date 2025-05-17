@@ -115,9 +115,9 @@ def visualize_results(df, trending, adx_values, bb_width, params):
     # 추세 블록 표시
     for start, end, is_trend in trend_blocks:
         if is_trend:
-            ax1.axvspan(start, end, alpha=0.2, color='green', label='Trending' if 'Trending' not in [l.get_label() for l in ax1.get_lines()] else "")
+            ax1.axvspan(start, end, alpha=0.2, color='green')
         else:
-            ax1.axvspan(start, end, alpha=0.1, color='gray', label='Ranging' if 'Ranging' not in [l.get_label() for l in ax1.get_lines()] else "")
+            ax1.axvspan(start, end, alpha=0.1, color='gray')
     
     # 추세장 비율 포함한 제목
     trend_percent = trending.sum() / len(trending) * 100
