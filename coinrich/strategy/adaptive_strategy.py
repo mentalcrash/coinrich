@@ -73,7 +73,7 @@ class AdaptivePositionStrategy:
         for i in range(lookback, len(trending)):
             # 현재와 과거 상태 비교
             if trending.iloc[i] != trending.iloc[i-lookback]:
-                changes.iloc[i] = True
+                changes.loc[changes.index[i]] = True
         
         return changes
     
@@ -124,21 +124,21 @@ class AdaptivePositionStrategy:
         for i in range(1, len(data)):
             if trending.iloc[i]:
                 # 추세장 매수 전략: 골든 크로스 또는 +DI > -DI
-                golden_cross = (data['ma_short'].iloc[i] > data['ma_long'].iloc[i] and 
-                               data['ma_short'].iloc[i-1] <= data['ma_long'].iloc[i-1])
+                golden_cross = (data.loc[data.index[i], 'ma_short'] > data.loc[data.index[i], 'ma_long'] and 
+                               data.loc[data.index[i-1], 'ma_short'] <= data.loc[data.index[i-1], 'ma_long'])
                 
-                di_cross = (data['plus_di'].iloc[i] > data['minus_di'].iloc[i] and
-                           data['plus_di'].iloc[i-1] <= data['minus_di'].iloc[i-1])
+                di_cross = (data.loc[data.index[i], 'plus_di'] > data.loc[data.index[i], 'minus_di'] and
+                           data.loc[data.index[i-1], 'plus_di'] <= data.loc[data.index[i-1], 'minus_di'])
                 
                 if golden_cross or di_cross:
-                    buy_signals.iloc[i] = True
+                    buy_signals.loc[data.index[i]] = True
             else:
                 # 횡보장 매수 전략: 볼린저 하단 터치 또는 RSI 과매도
-                bb_bottom = data['close'].iloc[i] <= data['bb_lower'].iloc[i]
-                rsi_oversold = data['rsi'].iloc[i] < self.rsi_oversold
+                bb_bottom = data.loc[data.index[i], 'close'] <= data.loc[data.index[i], 'bb_lower']
+                rsi_oversold = data.loc[data.index[i], 'rsi'] < self.rsi_oversold
                 
                 if bb_bottom or rsi_oversold:
-                    buy_signals.iloc[i] = True
+                    buy_signals.loc[data.index[i]] = True
         
         return buy_signals
     
@@ -162,40 +162,40 @@ class AdaptivePositionStrategy:
         for i in range(1, len(data)):
             # 시장 상태 변화 시 매도
             if state_change.iloc[i]:
-                sell_signals.iloc[i] = True
+                sell_signals.loc[data.index[i]] = True
                 continue
             
             # 전략별 매도 로직
             if trending.iloc[i]:
                 # 추세장 매도 전략: 데드 크로스 또는 +DI < -DI
-                dead_cross = (data['ma_short'].iloc[i] < data['ma_long'].iloc[i] and 
-                             data['ma_short'].iloc[i-1] >= data['ma_long'].iloc[i-1])
+                dead_cross = (data.loc[data.index[i], 'ma_short'] < data.loc[data.index[i], 'ma_long'] and 
+                             data.loc[data.index[i-1], 'ma_short'] >= data.loc[data.index[i-1], 'ma_long'])
                 
-                di_cross = (data['plus_di'].iloc[i] < data['minus_di'].iloc[i] and
-                           data['plus_di'].iloc[i-1] >= data['minus_di'].iloc[i-1])
+                di_cross = (data.loc[data.index[i], 'plus_di'] < data.loc[data.index[i], 'minus_di'] and
+                           data.loc[data.index[i-1], 'plus_di'] >= data.loc[data.index[i-1], 'minus_di'])
                 
                 if dead_cross or di_cross:
-                    sell_signals.iloc[i] = True
+                    sell_signals.loc[data.index[i]] = True
             else:
                 # 횡보장 매도 전략: 볼린저 상단 터치 또는 RSI 과매수
-                bb_top = data['close'].iloc[i] >= data['bb_upper'].iloc[i]
-                rsi_overbought = data['rsi'].iloc[i] > self.rsi_overbought
+                bb_top = data.loc[data.index[i], 'close'] >= data.loc[data.index[i], 'bb_upper']
+                rsi_overbought = data.loc[data.index[i], 'rsi'] > self.rsi_overbought
                 
                 if bb_top or rsi_overbought:
-                    sell_signals.iloc[i] = True
+                    sell_signals.loc[data.index[i]] = True
             
             # 손익 기반 매도 로직
             if position_open_price:
-                current_price = data['close'].iloc[i]
+                current_price = data.loc[data.index[i], 'close']
                 profit_pct = (current_price - position_open_price) / position_open_price
                 
                 # 익절
                 if profit_pct >= self.take_profit:
-                    sell_signals.iloc[i] = True
+                    sell_signals.loc[data.index[i]] = True
                 
                 # 손절
                 if profit_pct <= -self.stop_loss:
-                    sell_signals.iloc[i] = True
+                    sell_signals.loc[data.index[i]] = True
         
         return sell_signals
     

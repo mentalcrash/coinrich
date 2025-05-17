@@ -50,11 +50,11 @@ class Backtest:
         df['trending'] = trending
         df['market_state'] = trending.apply(lambda x: 'trending' if x else 'ranging')
         
-        # 결과 저장용 컬럼 추가
+        # 결과 저장용 컬럼 추가 - 데이터 타입 명시
         df['position'] = 0  # 0: 미보유, 1: 매수 포지션
-        df['capital'] = self.initial_capital  # 보유 현금
-        df['coin_value'] = 0  # 코인 가치
-        df['equity'] = self.initial_capital  # 총 자산 가치
+        df['capital'] = float(self.initial_capital)  # 보유 현금
+        df['coin_value'] = 0.0  # 코인 가치
+        df['equity'] = float(self.initial_capital)  # 총 자산 가치
         
         # 거래 기록
         trades = []
@@ -62,15 +62,15 @@ class Backtest:
         
         # 백테스팅 루프
         for i in range(1, len(df)):
-            # 이전 상태 복사
-            df['position'].iloc[i] = df['position'].iloc[i-1]
-            df['capital'].iloc[i] = df['capital'].iloc[i-1]
-            df['coin_value'].iloc[i] = df['coin_value'].iloc[i-1]
+            # 이전 상태 복사 - .loc 사용하여 할당
+            df.loc[df.index[i], 'position'] = df.loc[df.index[i-1], 'position']
+            df.loc[df.index[i], 'capital'] = float(df.loc[df.index[i-1], 'capital'])
+            df.loc[df.index[i], 'coin_value'] = float(df.loc[df.index[i-1], 'coin_value'])
             
-            current_price = df['close'].iloc[i]
+            current_price = df.loc[df.index[i], 'close']
             
             # 포지션이 없는 경우: 매수 신호 확인
-            if df['position'].iloc[i-1] == 0:
+            if df.loc[df.index[i-1], 'position'] == 0:
                 # 매수 전략 적용 (entry_signals)
                 entry_df = df.iloc[:i+1].copy()
                 buy_signal = self.strategy.entry_signals(entry_df, trending.iloc[:i+1]).iloc[-1]
@@ -78,7 +78,7 @@ class Backtest:
                 if buy_signal:
                     # 매수 실행
                     # 자본의 position_size 비율만큼 사용
-                    investment = df['capital'].iloc[i] * self.position_size
+                    investment = float(df.loc[df.index[i], 'capital']) * self.position_size
                     
                     # 수수료 계산
                     fee = investment * self.commission
@@ -88,9 +88,9 @@ class Backtest:
                     quantity = actual_investment / current_price
                     
                     # 자본 차감 및 코인 가치 증가
-                    df['capital'].iloc[i] -= investment
-                    df['coin_value'].iloc[i] = quantity * current_price
-                    df['position'].iloc[i] = 1
+                    df.loc[df.index[i], 'capital'] = float(df.loc[df.index[i], 'capital']) - investment
+                    df.loc[df.index[i], 'coin_value'] = float(quantity * current_price)
+                    df.loc[df.index[i], 'position'] = 1
                     
                     # 거래 기록 시작
                     current_position = {
@@ -99,13 +99,13 @@ class Backtest:
                         'quantity': quantity,
                         'investment': investment,
                         'fee_paid': fee,
-                        'market_state': df['market_state'].iloc[i]
+                        'market_state': df.loc[df.index[i], 'market_state']
                     }
             
             # 포지션이 있는 경우: 매도 신호 확인
-            elif df['position'].iloc[i-1] == 1 and current_position is not None:
+            elif df.loc[df.index[i-1], 'position'] == 1 and current_position is not None:
                 # 포지션 가치 업데이트
-                df['coin_value'].iloc[i] = current_position['quantity'] * current_price
+                df.loc[df.index[i], 'coin_value'] = float(current_position['quantity'] * current_price)
                 
                 # 매도 전략 적용 (exit_signals)
                 exit_df = df.iloc[:i+1].copy()
@@ -117,16 +117,16 @@ class Backtest:
                 
                 if sell_signal:
                     # 매도 실행
-                    sell_value = df['coin_value'].iloc[i]
+                    sell_value = float(df.loc[df.index[i], 'coin_value'])
                     
                     # 수수료 계산
                     fee = sell_value * self.commission
                     actual_sell_value = sell_value - fee
                     
                     # 자본 증가 및 코인 가치 제거
-                    df['capital'].iloc[i] += actual_sell_value
-                    df['coin_value'].iloc[i] = 0
-                    df['position'].iloc[i] = 0
+                    df.loc[df.index[i], 'capital'] = float(df.loc[df.index[i], 'capital']) + actual_sell_value
+                    df.loc[df.index[i], 'coin_value'] = 0.0
+                    df.loc[df.index[i], 'position'] = 0
                     
                     # 거래 완료 기록
                     pnl = actual_sell_value - current_position['investment']
@@ -140,14 +140,14 @@ class Backtest:
                         'total_fee': fee + current_position['fee_paid'],
                         'pnl': pnl,
                         'pnl_pct': pnl_pct,
-                        'exit_market_state': df['market_state'].iloc[i]
+                        'exit_market_state': df.loc[df.index[i], 'market_state']
                     })
                     
                     trades.append(current_position)
                     current_position = None
             
             # 자산 가치 계산
-            df['equity'].iloc[i] = df['capital'].iloc[i] + df['coin_value'].iloc[i]
+            df.loc[df.index[i], 'equity'] = float(df.loc[df.index[i], 'capital']) + float(df.loc[df.index[i], 'coin_value'])
         
         # 백테스트 결과 반환
         result = BacktestResult(df['equity'], df['position'], trades)
@@ -164,15 +164,9 @@ class Backtest:
         Returns:
             chart: 생성된 차트 객체
         """
-        # 캔들 차트 생성 - 더 큰 사이즈로 설정
-        chart = CandleChart(title="Adaptive Strategy Backtest", style="korean", 
-                          width=1500, height=1000)
-        
-        # 데이터 필터링 - 마지막 50개 캔들만 표시하여 캔들이 더 넓게 보이도록 함
-        display_data = self.data.iloc[-50:].copy()
-        
-        # 필터링된 데이터로 차트 생성
-        chart.plot(display_data)
+        # 캔들 차트 생성
+        chart = CandleChart(title="Adaptive Strategy Backtest", style="korean")
+        chart.plot(self.data)
         
         # 이동평균선 추가
         chart.add_moving_average([self.strategy.ma_short_period, self.strategy.ma_long_period])
@@ -180,50 +174,33 @@ class Backtest:
         # 볼린저 밴드 추가
         chart.add_bollinger_bands(period=self.strategy.bb_period, std_dev=self.strategy.bb_std_dev)
         
-        # 필터링된 데이터에 해당하는 인덱스만 표시
-        filtered_idx = display_data.index
-        filtered_data = data[data.index.isin(filtered_idx)]
-        
         # 시장 상태 배경색 표시
-        for i in range(1, len(filtered_data)):
-            idx = filtered_data.index[i-1]
-            next_idx = filtered_data.index[i]
-            
-            if idx in filtered_idx and next_idx in filtered_idx:
-                if filtered_data['trending'].iloc[i]:
-                    chart.axes[0].axvspan(idx, next_idx, 
-                                        alpha=0.2, color='green')
-                else:
-                    chart.axes[0].axvspan(idx, next_idx, 
-                                        alpha=0.1, color='gray')
+        for i in range(1, len(data)):
+            if data.loc[data.index[i], 'trending']:
+                chart.axes[0].axvspan(data.index[i-1], data.index[i], 
+                                     alpha=0.2, color='green')
+            else:
+                chart.axes[0].axvspan(data.index[i-1], data.index[i], 
+                                     alpha=0.1, color='gray')
         
-        # 매수/매도 포인트 표시 - 필터링된 기간 내 거래만 표시
+        # 매수/매도 포인트 표시
         for trade in result.trades:
-            entry_date = trade['entry_date']
-            exit_date = trade['exit_date']
+            # 매수 지점
+            chart.annotate("B", 
+                         (trade['entry_date'], self.data.loc[trade['entry_date'], 'low'] * 0.99), 
+                         color='green', arrow=True)
             
-            # 표시 기간 내 거래만 필터링
-            if entry_date in filtered_idx or exit_date in filtered_idx:
-                # 매수 지점이 표시 범위 내에 있는 경우
-                if entry_date in filtered_idx:
-                    # 매수 지점 - 더 크고 뚜렷하게 표시
-                    chart.annotate("BUY", 
-                                (entry_date, display_data.loc[entry_date, 'low'] * 0.995), 
-                                color='green', arrow=True)
-                
-                # 매도 지점이 표시 범위 내에 있는 경우
-                if exit_date in filtered_idx:
-                    # 매도 지점 - 더 크고 뚜렷하게 표시
-                    chart.annotate("SELL", 
-                                (exit_date, display_data.loc[exit_date, 'high'] * 1.005), 
-                                color='red', arrow=True)
-                    
-                    # 수익률 표시
-                    pnl_text = f"{trade['pnl_pct']*100:.1f}%"
-                    color = 'green' if trade['pnl'] > 0 else 'red'
-                    chart.annotate(pnl_text, 
-                                (exit_date, display_data.loc[exit_date, 'high'] * 1.01), 
-                                color=color, arrow=False)
+            # 매도 지점
+            chart.annotate("S", 
+                         (trade['exit_date'], self.data.loc[trade['exit_date'], 'high'] * 1.01), 
+                         color='red', arrow=True)
+            
+            # 수익률 표시
+            pnl_text = f"{trade['pnl_pct']*100:.1f}%"
+            color = 'green' if trade['pnl'] > 0 else 'red'
+            chart.annotate(pnl_text, 
+                         (trade['exit_date'], self.data.loc[trade['exit_date'], 'high'] * 1.03), 
+                         color=color, arrow=False)
         
         # 백테스트 정보 텍스트 추가
         info_text = (
@@ -233,13 +210,11 @@ class Backtest:
             f"Win Rate: {result.win_rate*100:.1f}%"
         )
         chart.axes[0].text(0.02, 0.05, info_text, transform=chart.axes[0].transAxes, 
-                          fontsize=12, bbox=dict(facecolor='white', alpha=0.7))
+                          fontsize=10, bbox=dict(facecolor='white', alpha=0.7))
         
         # 자산 가치 패널 추가
         equity_ax = chart.fig.add_axes([0.1, 0.05, 0.8, 0.15])
-        
-        # 자산 가치는 전체 기간 표시 (필터링 안함)
-        equity_ax.plot(result.equity.loc[filtered_idx], color='blue', linewidth=1.5)
+        equity_ax.plot(result.equity, color='blue', linewidth=1.5)
         equity_ax.set_title('Equity Curve')
         equity_ax.grid(True, alpha=0.3)
         

@@ -28,8 +28,9 @@ def test_adaptive_strategy():
         })
     
     df = pd.DataFrame(candle_data)
-    df.set_index('datetime', inplace=True)
-    df.sort_index(inplace=True)
+    # inplace=True 제거하고 새 DataFrame에 할당
+    df = df.set_index('datetime')
+    df = df.sort_index()
     
     # 전략 파라미터
     strategy_params = {
