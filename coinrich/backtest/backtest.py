@@ -164,9 +164,13 @@ class Backtest:
         Returns:
             chart: 생성된 차트 객체
         """
+        # 데이터 일관성을 위해 동일한 데이터프레임 사용
+        # 필요한 OHLC 컬럼이 있는지 확인
+        chart_data = data.copy()
+        
         # 캔들 차트 생성
         chart = CandleChart(title="Adaptive Strategy Backtest", style="korean")
-        chart.plot(self.data)
+        chart.plot(chart_data)  # self.data 대신 백테스팅 결과 데이터를 사용
         
         # 이동평균선 추가
         chart.add_moving_average([self.strategy.ma_short_period, self.strategy.ma_long_period])
@@ -187,19 +191,19 @@ class Backtest:
         for trade in result.trades:
             # 매수 지점
             chart.annotate("B", 
-                         (trade['entry_date'], self.data.loc[trade['entry_date'], 'low'] * 0.99), 
+                         (trade['entry_date'], chart_data.loc[trade['entry_date'], 'low'] * 0.99), 
                          color='green', arrow=True)
             
             # 매도 지점
             chart.annotate("S", 
-                         (trade['exit_date'], self.data.loc[trade['exit_date'], 'high'] * 1.01), 
+                         (trade['exit_date'], chart_data.loc[trade['exit_date'], 'high'] * 1.01), 
                          color='red', arrow=True)
             
             # 수익률 표시
             pnl_text = f"{trade['pnl_pct']*100:.1f}%"
             color = 'green' if trade['pnl'] > 0 else 'red'
             chart.annotate(pnl_text, 
-                         (trade['exit_date'], self.data.loc[trade['exit_date'], 'high'] * 1.03), 
+                         (trade['exit_date'], chart_data.loc[trade['exit_date'], 'high'] * 1.03), 
                          color=color, arrow=False)
         
         # 백테스트 정보 텍스트 추가
