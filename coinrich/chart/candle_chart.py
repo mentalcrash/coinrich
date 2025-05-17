@@ -54,8 +54,22 @@ class CandleChart(BaseChart):
         Returns:
             스타일 설정 딕셔너리
         """
+        if style_name == 'korean':
+            # 한국식 캔들 색상 (상승: 빨간색, 하락: 파란색)
+            mc = mpf.make_marketcolors(
+                up='#FF3232',         # 상승봉 색상 (빨간색)
+                down='#0066FF',       # 하락봉 색상 (파란색)
+                edge='inherit',       # 캔들 테두리는 몸통 색상과 동일
+                wick='inherit',       # 심지 색상은 몸통 색상과 동일
+                volume='inherit',     # 거래량은 캔들 색상과 동일
+            )
+            
+            return mpf.make_mpf_style(
+                base_mpf_style='yahoo',
+                marketcolors=mc
+            )
         # mplfinance 기본 스타일 사용
-        if style_name in ['binance', 'upbit']:
+        elif style_name in ['binance', 'upbit']:
             # 커스텀 스타일이 호환성 문제로 직접 구현하지 않고 기본 스타일 사용
             if style_name == 'binance':
                 return 'yahoo'
