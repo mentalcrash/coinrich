@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple, Union
+import matplotlib.dates as mdates
 
 from coinrich.strategy.adaptive_strategy import AdaptivePositionStrategy
 from coinrich.backtest.backtest_result import BacktestResult
@@ -178,33 +179,57 @@ class Backtest:
         # 볼린저 밴드 추가
         chart.add_bollinger_bands(period=self.strategy.bb_period, std_dev=self.strategy.bb_std_dev)
         
-        # 시장 상태 배경색 표시
+        # mplfinance는 내부적으로 날짜를 숫자 인덱스로 변환하므로
+        # 날짜 인덱스를 차트의 x축 위치로 변환하는 매핑이 필요합니다
+        
+        # 차트 내부적으로 데이터는 0부터 시작하는 인덱스로 표시됩니다
+        # 시장 상태 배경색 표시 - 최적화된 방식
+        prev_trending = data['trending'].iloc[0]
+        start_idx = 0
+        
         for i in range(1, len(data)):
-            if data.loc[data.index[i], 'trending']:
-                chart.axes[0].axvspan(data.index[i-1], data.index[i], 
-                                     alpha=0.2, color='green')
-            else:
-                chart.axes[0].axvspan(data.index[i-1], data.index[i], 
-                                     alpha=0.1, color='gray')
+            # 추세 상태가 변하거나 마지막 데이터에 도달한 경우
+            if data['trending'].iloc[i] != prev_trending or i == len(data) - 1:
+                end_idx = i
+                
+                # 현재 추세에 맞는 색상 선택
+                color = 'green' if prev_trending else 'gray'
+                alpha = 0.2 if prev_trending else 0.1
+                
+                # 구간 채우기
+                chart.axes[0].axvspan(start_idx, end_idx, alpha=alpha, color=color)
+                
+                # 다음 구간 시작
+                prev_trending = data['trending'].iloc[i]
+                start_idx = i
+        
+        # 매수/매도 포인트 표시를 위한 인덱스 위치 찾기
+        date_to_idx = {date: idx for idx, date in enumerate(data.index)}
         
         # 매수/매도 포인트 표시
         for trade in result.trades:
-            # 매수 지점
-            chart.annotate("B", 
-                         (trade['entry_date'], chart_data.loc[trade['entry_date'], 'low'] * 0.99), 
-                         color='green', arrow=True)
+            # 날짜를 정수 위치로 변환
+            entry_idx = date_to_idx.get(trade['entry_date'])
+            exit_idx = date_to_idx.get(trade['exit_date'])
             
-            # 매도 지점
-            chart.annotate("S", 
-                         (trade['exit_date'], chart_data.loc[trade['exit_date'], 'high'] * 1.01), 
-                         color='red', arrow=True)
+            if entry_idx is not None:
+                # 매수 지점
+                chart.annotate("B", 
+                             (entry_idx, chart_data.loc[trade['entry_date'], 'low'] * 0.99), 
+                             color='green', arrow=True)
             
-            # 수익률 표시
-            pnl_text = f"{trade['pnl_pct']*100:.1f}%"
-            color = 'green' if trade['pnl'] > 0 else 'red'
-            chart.annotate(pnl_text, 
-                         (trade['exit_date'], chart_data.loc[trade['exit_date'], 'high'] * 1.03), 
-                         color=color, arrow=False)
+            if exit_idx is not None:
+                # 매도 지점
+                chart.annotate("S", 
+                             (exit_idx, chart_data.loc[trade['exit_date'], 'high'] * 1.01), 
+                             color='red', arrow=True)
+                
+                # 수익률 표시
+                pnl_text = f"{trade['pnl_pct']*100:.1f}%"
+                color = 'green' if trade['pnl'] > 0 else 'red'
+                chart.annotate(pnl_text, 
+                             (exit_idx, chart_data.loc[trade['exit_date'], 'high'] * 1.03), 
+                             color=color, arrow=False)
         
         # 백테스트 정보 텍스트 추가
         info_text = (
@@ -218,7 +243,10 @@ class Backtest:
         
         # 자산 가치 패널 추가
         equity_ax = chart.fig.add_axes([0.1, 0.05, 0.8, 0.15])
-        equity_ax.plot(result.equity, color='blue', linewidth=1.5)
+        
+        # 자산 가치를 위한 x 축 인덱스 생성 (날짜 대신 정수 위치 사용)
+        x_range = range(len(result.equity))
+        equity_ax.plot(x_range, result.equity, color='blue', linewidth=1.5)
         equity_ax.set_title('Equity Curve')
         equity_ax.grid(True, alpha=0.3)
         

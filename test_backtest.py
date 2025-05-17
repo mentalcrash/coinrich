@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
+import matplotlib.dates as mdates
 
 from coinrich.service.candle_service import CandleService
 from coinrich.strategy.adaptive_strategy import AdaptivePositionStrategy
@@ -88,6 +89,24 @@ def test_adaptive_strategy():
     
     # 결과 시각화
     chart = backtest.visualize(result, df_result)
+    
+    # X축 정보 출력
+    print("\n=== X-Axis Information ===")
+    print(f"X-axis type: {type(chart.axes[0].xaxis)}")
+    print(f"X-axis limits: {chart.axes[0].get_xlim()}")
+    print(f"X-axis ticks: {chart.axes[0].get_xticks()}")
+    print(f"X-axis formatter: {chart.axes[0].xaxis.get_major_formatter()}")
+    
+    # X축 데이터와 인덱스 매핑 확인
+    x_min, x_max = chart.axes[0].get_xlim()
+    print(f"X-axis min date: {mdates.num2date(x_min)}")
+    print(f"X-axis max date: {mdates.num2date(x_max)}")
+    
+    # 데이터 인덱스 확인
+    print("\n=== DataFrame Index ===")
+    print(f"First date: {df_result.index[0]}")
+    print(f"Last date: {df_result.index[-1]}")
+    print(f"Total dates: {len(df_result.index)}")
     
     # 차트 표시
     chart.show()
