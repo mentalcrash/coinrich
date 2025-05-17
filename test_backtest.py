@@ -14,7 +14,7 @@ def test_adaptive_strategy():
     
     # 데이터 가져오기
     service = CandleService()
-    candles = service.get_minute_candles("KRW-BTC", unit=60, count=200)
+    candles = service.get_minute_candles("KRW-BTC", unit=15, count=200)
     
     # DataFrame으로 변환
     candle_data = []
@@ -37,8 +37,8 @@ def test_adaptive_strategy():
     strategy_params = {
         'adx_threshold': 25,           # ADX 임계값
         'bb_width_percentile': 70,     # 볼린저 밴드 폭 백분위수
-        'ma_short_period': 20,         # 단기 이동평균
-        'ma_long_period': 50,          # 장기 이동평균
+        'ma_short_period': 5,         # 단기 이동평균
+        'ma_long_period': 20,          # 장기 이동평균
         'bb_period': 20,               # 볼린저 밴드 기간
         'bb_std_dev': 2.0,             # 볼린저 밴드 표준편차
         'rsi_period': 14,              # RSI 기간
@@ -88,17 +88,17 @@ def test_adaptive_strategy():
         print(f"Ranging market avg return: {trade_stats['ranging_avg_return']*100:.2f}%")
     
     # 결과 시각화
-    chart = backtest.visualize(result, df_result)
+    fig = backtest.visualize(result, df_result)
     
     # X축 정보 출력
     print("\n=== X-Axis Information ===")
-    print(f"X-axis type: {type(chart.axes[0].xaxis)}")
-    print(f"X-axis limits: {chart.axes[0].get_xlim()}")
-    print(f"X-axis ticks: {chart.axes[0].get_xticks()}")
-    print(f"X-axis formatter: {chart.axes[0].xaxis.get_major_formatter()}")
+    print(f"X-axis type: {type(fig.axes[0].xaxis)}")
+    print(f"X-axis limits: {fig.axes[0].get_xlim()}")
+    print(f"X-axis ticks: {fig.axes[0].get_xticks()}")
+    print(f"X-axis formatter: {fig.axes[0].xaxis.get_major_formatter()}")
     
     # X축 데이터와 인덱스 매핑 확인
-    x_min, x_max = chart.axes[0].get_xlim()
+    x_min, x_max = fig.axes[0].get_xlim()
     print(f"X-axis min date: {mdates.num2date(x_min)}")
     print(f"X-axis max date: {mdates.num2date(x_max)}")
     
@@ -109,9 +109,9 @@ def test_adaptive_strategy():
     print(f"Total dates: {len(df_result.index)}")
     
     # 차트 표시
-    chart.show()
+    plt.show()
     
-    return result, df_result, chart
+    return result, df_result, fig
 
 
 if __name__ == "__main__":

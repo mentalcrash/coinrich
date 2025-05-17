@@ -3,6 +3,7 @@ import numpy as np
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple, Union
 import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 
 from coinrich.strategy.adaptive_strategy import AdaptivePositionStrategy
 from coinrich.backtest.backtest_result import BacktestResult
@@ -155,7 +156,7 @@ class Backtest:
         
         return result, df
     
-    def visualize(self, result: BacktestResult, data: pd.DataFrame) -> CandleChart:
+    def visualize(self, result: BacktestResult, data: pd.DataFrame) -> plt.Figure:
         """백테스트 결과 시각화
         
         Args:
@@ -169,18 +170,24 @@ class Backtest:
         # 필요한 OHLC 컬럼이 있는지 확인
         chart_data = data.copy()
         
-        # 캔들 차트 생성
-        chart = CandleChart(title="Adaptive Strategy Backtest", style="korean")
-        chart.plot(chart_data)  # self.data 대신 백테스팅 결과 데이터를 사용
+        # 서브플롯 생성 (메인 차트와 equity 차트)
+        fig, (ax_main, ax_equity) = plt.subplots(
+            nrows=2, ncols=1,
+            sharex=True,
+            gridspec_kw={'height_ratios': [4, 1]},
+            figsize=(12, 8),
+            constrained_layout=True
+        )
+        
+        # 캔들 차트 생성 (외부 axes 사용)
+        chart = CandleChart(title="Adaptive Strategy Backtest", style="korean", ax=ax_main, fig=fig)
+        chart.plot(chart_data)
         
         # 이동평균선 추가
         chart.add_moving_average([self.strategy.ma_short_period, self.strategy.ma_long_period])
         
         # 볼린저 밴드 추가
         chart.add_bollinger_bands(period=self.strategy.bb_period, std_dev=self.strategy.bb_std_dev)
-        
-        # mplfinance는 내부적으로 날짜를 숫자 인덱스로 변환하므로
-        # 날짜 인덱스를 차트의 x축 위치로 변환하는 매핑이 필요합니다
         
         # 차트 내부적으로 데이터는 0부터 시작하는 인덱스로 표시됩니다
         # 시장 상태 배경색 표시 - 최적화된 방식
@@ -196,8 +203,8 @@ class Backtest:
                 color = 'green' if prev_trending else 'gray'
                 alpha = 0.2 if prev_trending else 0.1
                 
-                # 구간 채우기
-                chart.axes[0].axvspan(start_idx, end_idx, alpha=alpha, color=color)
+                # 구간 채우기 - chart.axes 대신 ax_main 직접 사용
+                ax_main.axvspan(start_idx, end_idx, alpha=alpha, color=color)
                 
                 # 다음 구간 시작
                 prev_trending = data['trending'].iloc[i]
@@ -212,45 +219,47 @@ class Backtest:
             entry_idx = date_to_idx.get(trade['entry_date'])
             exit_idx = date_to_idx.get(trade['exit_date'])
             
+            # 실제 거래가(종가) 기준으로 표시
             if entry_idx is not None:
-                # 매수 지점
-                chart.annotate("B", 
-                             (entry_idx, chart_data.loc[trade['entry_date'], 'low'] * 0.99), 
-                             color='green', arrow=True)
+                # 매수 지점 - 실제 거래가 표시
+                buy_price = chart_data.loc[trade['entry_date'], 'close']
+                buy_annotation = f"B ({buy_price:,.0f})"
+                
+                # chart.annotate 대신 직접 주석 추가
+                ax_main.annotate(buy_annotation, 
+                             (entry_idx, buy_price), 
+                             color='green', arrowprops=dict(color='green'))
             
             if exit_idx is not None:
-                # 매도 지점
-                chart.annotate("S", 
-                             (exit_idx, chart_data.loc[trade['exit_date'], 'high'] * 1.01), 
-                             color='red', arrow=True)
-                
-                # 수익률 표시
+                # 매도 지점 - 실제 거래가와 수익률 표시
+                sell_price = chart_data.loc[trade['exit_date'], 'close']
                 pnl_text = f"{trade['pnl_pct']*100:.1f}%"
-                color = 'green' if trade['pnl'] > 0 else 'red'
-                chart.annotate(pnl_text, 
-                             (exit_idx, chart_data.loc[trade['exit_date'], 'high'] * 1.03), 
-                             color=color, arrow=False)
+                sell_annotation = f"S ({sell_price:,.0f}, {pnl_text})"
+                
+                # chart.annotate 대신 직접 주석 추가
+                ax_main.annotate(sell_annotation, 
+                             (exit_idx, sell_price), 
+                             color='red', arrowprops=dict(color='red'))
         
         # 백테스트 정보 텍스트 추가
         info_text = (
             f"Total Return: {result.total_return*100:.1f}%\n"
             f"Max Drawdown: {result.max_drawdown*100:.1f}%\n"
             f"Trades: {result.num_trades}\n"
-            f"Win Rate: {result.win_rate*100:.1f}%"
+            f"Win Rate: {result.win_rate*100:.1f}%\n"
+            f"Commission: {self.commission*100:.3f}%"  # 수수료율 표시 추가
         )
-        chart.axes[0].text(0.02, 0.05, info_text, transform=chart.axes[0].transAxes, 
-                          fontsize=10, bbox=dict(facecolor='white', alpha=0.7))
+        ax_main.text(0.02, 0.05, info_text, transform=ax_main.transAxes, 
+                   fontsize=10, bbox=dict(facecolor='white', alpha=0.7))
         
-        # 자산 가치 패널 추가
-        equity_ax = chart.fig.add_axes([0.1, 0.05, 0.8, 0.15])
-        
-        # 자산 가치를 위한 x 축 인덱스 생성 (날짜 대신 정수 위치 사용)
+        # 자산 가치 패널 추가 - sharex를 통해 x축 공유
         x_range = range(len(result.equity))
-        equity_ax.plot(x_range, result.equity, color='blue', linewidth=1.5)
-        equity_ax.set_title('Equity Curve')
-        equity_ax.grid(True, alpha=0.3)
+        ax_equity.plot(x_range, result.equity, color='blue', linewidth=1.5)
+        ax_equity.set_title('Equity Curve')
+        ax_equity.grid(True, alpha=0.3)
+        ax_equity.set_ylabel('Capital')
         
         # 차트 저장
-        chart.save("adaptive_strategy_backtest.png")
+        fig.savefig("charts/adaptive_strategy_backtest.png", dpi=150)
         
-        return chart 
+        return fig 

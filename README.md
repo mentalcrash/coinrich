@@ -12,6 +12,8 @@ Upbit API를 활용한 암호화폐 트레이딩 봇 프로젝트
 - 캔들 차트 시각화 (한국식 캔들 색상 지원)
 - 다양한 기술적 지표 계산 및 시각화
 - 추세장/횡보장 판별 기능
+- 백테스팅 시스템 및 성과 분석
+- 적응형 트레이딩 전략 구현
 
 ## 설치 방법
 
@@ -110,6 +112,14 @@ korean_chart.plot(candles)
 # 차트 저장 및 표시
 chart.save("btc_chart.png")
 chart.show()
+
+# 외부 축(axes)을 사용한 차트 생성
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots(figsize=(12, 8))
+chart = CandleChart(title="BTC/KRW - 커스텀 차트", style="korean", ax=ax, fig=fig)
+chart.plot(candles)
+chart.add_moving_average([10, 30])
+plt.show()
 ```
 
 ### 기술적 지표 사용
@@ -148,6 +158,59 @@ trending, _, _ = is_trending_market(df, adx_threshold=25, bb_width_percentile=70
 print(f"현재 추세장 여부: {trending.iloc[-1]}")
 ```
 
+### 백테스팅 시스템 사용
+
+```python
+from coinrich.service.candle_service import CandleService
+from coinrich.strategy.adaptive_strategy import AdaptivePositionStrategy
+from coinrich.backtest.backtest import Backtest
+import pandas as pd
+
+# 데이터 준비
+service = CandleService()
+candles = service.get_minute_candles("KRW-BTC", unit=60, count=200)
+
+# 데이터프레임 변환
+candle_data = []
+for candle in candles:
+    candle_data.append({
+        'datetime': pd.to_datetime(candle.candle_date_time_utc),
+        'open': candle.opening_price,
+        'high': candle.high_price,
+        'low': candle.low_price,
+        'close': candle.trade_price,
+        'volume': candle.candle_acc_trade_volume
+    })
+
+df = pd.DataFrame(candle_data)
+df = df.set_index('datetime')
+df = df.sort_index()
+
+# 전략 파라미터 설정
+strategy_params = {
+    'adx_threshold': 25,           # ADX 임계값
+    'bb_width_percentile': 70,     # 볼린저 밴드 폭 백분위수
+    'ma_short_period': 20,         # 단기 이동평균
+    'ma_long_period': 50,          # 장기 이동평균
+    'rsi_period': 14,              # RSI 기간
+    'take_profit': 0.05,           # 5% 익절
+    'stop_loss': 0.02              # 2% 손절
+}
+
+# 백테스트 실행
+strategy = AdaptivePositionStrategy(strategy_params)
+backtest = Backtest(df, strategy, initial_capital=1000000, position_size=0.5)
+result, df_result = backtest.run()
+
+# 백테스트 결과 확인
+print(result.summary())
+print(result.trade_summary())
+
+# 결과 시각화 및 차트 저장
+fig = backtest.visualize(result, df_result)
+plt.show()
+```
+
 ## 테스트 실행
 
 ```
@@ -155,6 +218,7 @@ python test.py                   # 기본 API 테스트
 python test_candle_service.py    # 캔들 서비스 및 캐싱 테스트
 python test_chart.py             # 차트 시각화 테스트
 python test_indicators.py        # 기술적 지표 테스트
+python test_backtest.py          # 백테스팅 및 전략 테스트
 ```
 
 ## 프로젝트 구조
@@ -172,8 +236,13 @@ coinrich/
 ├── chart/
 │   ├── base_chart.py     # 차트 기본 추상 클래스
 │   └── candle_chart.py   # 캔들 차트 구현
-└── utils/
-    └── indicators.py     # 기술적 지표 계산 함수
+├── utils/
+│   └── indicators.py     # 기술적 지표 계산 함수
+├── strategy/
+│   └── adaptive_strategy.py # 적응형 트레이딩 전략
+└── backtest/
+    ├── backtest.py       # 백테스팅 엔진
+    └── backtest_result.py # 백테스트 결과 분석
 ```
 
 ## 구현된 기술적 지표
@@ -189,12 +258,20 @@ coinrich/
 - ADX (평균방향지수)
 - 추세장/횡보장 판별 알고리즘
 
+## 구현된 백테스팅 및 시각화 기능
+
+- 백테스팅 엔진 및 성과 분석
+- 시장 상태별 성과 분석 (추세장/횡보장)
+- 메인 차트와 Equity 차트 동기화 (matplotlib sharex 활용)
+- 매수/매도 포인트 시각화
+- 수익률 및 성과 지표 계산
+- 시장 상태 시각화 (배경색 구분)
+
 ## 추가 예정 기능
 
-- 백테스팅 시스템
-- 트레이딩 전략 구현
-- 리스크 관리 시스템
+- 최적화된 파라미터 탐색 기능
 - 실시간 거래 알고리즘
+- 리스크 관리 시스템
 - 웹 대시보드
 
 ## 라이센스

@@ -22,6 +22,8 @@ class CandleChart(BaseChart):
                  style: str = 'yahoo',
                  save_dir: str = 'charts',
                  volume: bool = True,
+                 ax: Optional[plt.Axes] = None,
+                 fig: Optional[plt.Figure] = None,
                  **kwargs):
         """
         Args:
@@ -31,6 +33,8 @@ class CandleChart(BaseChart):
             style: 차트 스타일 ('default', 'binance', 'yahoo', 'classic', 등)
             save_dir: 차트 저장 디렉토리
             volume: 거래량 표시 여부
+            ax: 외부에서 제공된 matplotlib Axes 객체
+            fig: 외부에서 제공된 matplotlib Figure 객체
             **kwargs: 추가 매개변수
         """
         super().__init__(title, width, height, style, save_dir)
@@ -38,6 +42,10 @@ class CandleChart(BaseChart):
         self.panel_ratios = kwargs.get('panel_ratios', (4, 1))  # 기본 비율: 캔들 4, 거래량 1
         self.ma_periods = []  # 이동평균선 기간 리스트
         self.ma_colors = []   # 이동평균선 색상 리스트
+        
+        # 외부 axes와 figure 저장
+        self.external_ax = ax
+        self.external_fig = fig
         
         # mplfinance 스타일 설정
         self.mpf_style = self._get_mpf_style(style)
@@ -88,6 +96,41 @@ class CandleChart(BaseChart):
         if self.data is None:
             raise ValueError("데이터가 없습니다. plot() 메소드를 먼저 호출하세요.")
         
+        # 외부에서 제공된 axes 사용
+        if self.external_ax is not None:
+            self.fig = self.external_fig if self.external_fig is not None else self.external_ax.figure
+            self.axes = [self.external_ax]
+            
+            # 제목 설정
+            if self.title:
+                self.external_ax.set_title(self.title)
+            
+            # 캔들차트 그리기
+            mpf.plot(
+                self.data,
+                ax=self.external_ax,
+                style=self.mpf_style,
+                type='candle',
+                volume=False,  # 별도의 볼륨 패널을 사용하지 않음
+                returnfig=False
+            )
+            
+            # 추가 플롯이 있으면 설정
+            if self.additional_plots:
+                for ap in self.additional_plots:
+                    mpf.plot(
+                        self.data,
+                        ax=self.external_ax,
+                        style=self.mpf_style,
+                        type='candle',
+                        volume=False,
+                        addplot=ap,
+                        returnfig=False
+                    )
+                    
+            return self.fig, self.axes
+        
+        # 기존 로직: 자체적으로 figure와 axes 생성
         # 레이아웃 설정
         kwargs = {
             'figsize': (self.width / 100, self.height / 100),
@@ -119,7 +162,24 @@ class CandleChart(BaseChart):
         # 데이터 전처리
         self.data = self._prepare_data(data)
         
-        # 차트 생성
+        # 외부 axes 사용 시 직접 그리기
+        if self.external_ax is not None:
+            # 캔들차트 그리기 (mpf.plot)
+            mpf.plot(
+                self.data,
+                ax=self.external_ax,
+                style=self.mpf_style,
+                type='candle',
+                volume=False,
+                returnfig=False
+            )
+            
+            if self.title:
+                self.external_ax.set_title(self.title)
+                
+            return
+        
+        # 자체적으로 axes를 생성하는 경우
         self.create_figure()
     
     def _prepare_data(self, data: Union[pd.DataFrame, MinuteCandleList]) -> pd.DataFrame:
@@ -215,7 +275,17 @@ class CandleChart(BaseChart):
         self.ma_periods = periods
         self.ma_colors = colors
         
-        # 차트 다시 그리기
+        # 외부 axes 사용 시 직접 그리기
+        if self.external_ax is not None:
+            for i, period in enumerate(periods):
+                ma = self.data['close'].rolling(window=period).mean()
+                self.external_ax.plot(range(len(ma)), ma, color=colors[i], linewidth=1, label=f'MA{period}')
+            
+            # 범례 추가
+            self.external_ax.legend(loc='upper left')
+            return
+        
+        # 차트 다시 그리기 (외부 axes가 없을 경우만)
         self.create_figure()
     
     def add_bollinger_bands(self, period: int = 20, std_dev: float = 2.0, color: str = '#9C27B0') -> None:
@@ -243,6 +313,17 @@ class CandleChart(BaseChart):
             mpf.make_addplot(ma, color=color, linestyle='-', width=1.0, label=f'MA({period})'),
             mpf.make_addplot(lower_band, color=color, linestyle='--', width=0.8, label=f'Lower BB({period})')
         ])
+        
+        # 외부 axes 사용 시 직접 그리기
+        if self.external_ax is not None:
+            x = range(len(ma))
+            self.external_ax.plot(x, upper_band, color=color, linestyle='--', linewidth=0.8, label=f'Upper BB({period})')
+            self.external_ax.plot(x, ma, color=color, linestyle='-', linewidth=1.0, label=f'MA({period})')
+            self.external_ax.plot(x, lower_band, color=color, linestyle='--', linewidth=0.8, label=f'Lower BB({period})')
+            
+            # 범례 추가
+            self.external_ax.legend(loc='upper left')
+            return
         
         # 차트 다시 그리기
         self.create_figure()
