@@ -9,7 +9,7 @@ from typing import List, Union, Optional
 
 from coinrich.models.market import MarketList
 from coinrich.models.ticker import Ticker, TickerList
-from coinrich.models.candle import SecondCandle, SecondCandleList
+from coinrich.models.candle import SecondCandle, SecondCandleList, MinuteCandleList
 
 load_dotenv()
 
@@ -108,9 +108,36 @@ class UpbitAPI:
             
         return SecondCandleList(root=data)
     
-    def get_candles(self, market, unit=1, count=200):
-        """분 캔들 조회"""
-        pass
+    def get_minute_candles(self, market, unit=1, count=200, to=None):
+        """분 캔들 조회
+        
+        Args:
+            market: 마켓 코드 (예: KRW-BTC)
+            unit: 분 단위 (기본값: 1, 가능한 값: 1, 3, 5, 15, 10, 30, 60, 240)
+            to: 마지막 캔들 시각 (exclusive). 형식: yyyy-MM-dd'T'HH:mm:ss'Z' or yyyy-MM-dd HH:mm:ss
+            count: 캔들 개수 (최대 200개까지)
+            
+        Returns:
+            분 캔들 목록을 담은 MinuteCandleList 객체
+            
+        Raises:
+            HTTPError: API 호출 중 오류 발생 시
+        """
+        url = f"{self.BASE_URL}/candles/minutes/{unit}"
+        
+        params = {
+            'market': market,
+            'count': count
+        }
+        
+        if to:
+            params['to'] = to
+            
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        return MinuteCandleList(root=data)
     
     def get_orderbook(self, markets):
         """호가 정보 조회"""
