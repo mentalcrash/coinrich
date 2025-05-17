@@ -242,4 +242,116 @@ def obv(data: pd.DataFrame) -> pd.Series:
     # OBV = 부호가 적용된 볼륨의 누적합
     obv_values = signed_volume.cumsum()
     
-    return obv_values 
+    return obv_values
+
+
+def bollinger_band_width(data: pd.DataFrame, period: int = 20, std_dev: float = 2.0, 
+                        column: str = 'close') -> pd.Series:
+    """볼린저 밴드 폭(Bollinger Band Width) 계산
+    
+    볼린저 밴드의 폭은 시장의 변동성을 나타내며, 
+    폭이 좁아지면 횡보장, 폭이 넓어지면 추세장의 신호가 될 수 있음
+    
+    Args:
+        data: OHLCV 데이터프레임
+        period: 이동평균 기간
+        std_dev: 표준편차 배수
+        column: 사용할 가격 컬럼 (기본값: 'close')
+        
+    Returns:
+        볼린저 밴드 폭 시리즈 (상단밴드-하단밴드)/중간밴드
+    """
+    # 볼린저 밴드 계산
+    bb = bollinger_bands(data, period, std_dev, column)
+    
+    # 밴드 폭 계산 = (상단밴드 - 하단밴드) / 중간밴드
+    bb_width = (bb['upper'] - bb['lower']) / bb['middle']
+    
+    return bb_width
+
+
+def adx(data: pd.DataFrame, period: int = 14) -> Dict[str, pd.Series]:
+    """ADX(Average Directional Index) 계산
+    
+    ADX는 추세의 강도를 측정하는 지표로, 방향이 아닌 강도만 측정함
+    일반적으로 ADX > 25이면 강한 추세, ADX < 20이면 약한 추세(횡보장)로 간주
+    
+    Args:
+        data: OHLCV 데이터프레임 ('high', 'low', 'close' 컬럼 필요)
+        period: ADX 계산 기간
+        
+    Returns:
+        {'adx': ADX, 'plus_di': +DI, 'minus_di': -DI} 딕셔너리
+    """
+    # DM(Directional Movement) 계산
+    high_diff = data['high'].diff()
+    low_diff = data['low'].diff().mul(-1)  # 음수를 양수로 변환
+    
+    # +DM과 -DM 계산
+    plus_dm = pd.Series(0, index=data.index)
+    minus_dm = pd.Series(0, index=data.index)
+    
+    # +DM: 고가 상승폭 > 저가 하락폭 && 고가 상승폭 > 0
+    plus_dm_condition = (high_diff > low_diff) & (high_diff > 0)
+    plus_dm.loc[plus_dm_condition] = high_diff.loc[plus_dm_condition]
+    
+    # -DM: 저가 하락폭 > 고가 상승폭 && 저가 하락폭 > 0
+    minus_dm_condition = (low_diff > high_diff) & (low_diff > 0)
+    minus_dm.loc[minus_dm_condition] = low_diff.loc[minus_dm_condition]
+    
+    # TR(True Range) 계산
+    tr = atr(data, 1)  # ATR 계산 시 사용한 True Range (EMA 적용 전)
+    
+    # Smoothed +DM, -DM과 TR 계산
+    smoothed_plus_dm = plus_dm.rolling(window=period).sum()
+    smoothed_minus_dm = minus_dm.rolling(window=period).sum()
+    smoothed_tr = tr.rolling(window=period).sum()
+    
+    # +DI와 -DI 계산
+    plus_di = 100 * (smoothed_plus_dm / smoothed_tr)
+    minus_di = 100 * (smoothed_minus_dm / smoothed_tr)
+    
+    # DX 계산: |+DI - -DI| / (|+DI| + |-DI|) * 100
+    dx = 100 * ((plus_di - minus_di).abs() / (plus_di + minus_di).abs())
+    
+    # ADX 계산: DX의 period 기간 동안의 평균
+    adx_value = dx.rolling(window=period).mean()
+    
+    return {
+        'adx': adx_value,
+        'plus_di': plus_di,
+        'minus_di': minus_di
+    }
+
+
+def is_trending_market(data: pd.DataFrame, adx_threshold: float = 25.0, 
+                       bb_width_percentile: float = 70.0, lookback: int = 20) -> pd.Series:
+    """추세장 여부 판단
+    
+    ADX와 볼린저 밴드 폭을 기반으로 추세장 여부를 판단합니다.
+    ADX가 높고 볼린저 밴드 폭이 넓으면 추세장으로 판단합니다.
+    
+    Args:
+        data: OHLCV 데이터프레임
+        adx_threshold: ADX 임계값 (이 값보다 크면 추세장으로 간주)
+        bb_width_percentile: 볼린저 밴드 폭 백분위수 임계값
+        lookback: 볼린저 밴드 폭 백분위 계산 기간
+        
+    Returns:
+        추세장 여부 시리즈 (True/False)
+    """
+    # ADX 계산
+    adx_values = adx(data)['adx']
+    
+    # 볼린저 밴드 폭 계산
+    bb_width = bollinger_band_width(data)
+    
+    # 볼린저 밴드 폭 백분위 계산 (rolling window)
+    bb_width_rank = bb_width.rolling(window=lookback).apply(
+        lambda x: pd.Series(x).rank(pct=True).iloc[-1] * 100
+    )
+    
+    # 추세장 판단
+    trending = (adx_values > adx_threshold) & (bb_width_rank > bb_width_percentile)
+    
+    return trending, adx_values, bb_width 
