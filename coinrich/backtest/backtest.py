@@ -164,9 +164,15 @@ class Backtest:
         Returns:
             chart: 생성된 차트 객체
         """
-        # 캔들 차트 생성
-        chart = CandleChart(title="Adaptive Strategy Backtest", style="korean")
-        chart.plot(self.data)
+        # 캔들 차트 생성 - 더 큰 사이즈로 설정
+        chart = CandleChart(title="Adaptive Strategy Backtest", style="korean", 
+                          width=1500, height=1000)
+        
+        # 데이터 필터링 - 마지막 50개 캔들만 표시하여 캔들이 더 넓게 보이도록 함
+        display_data = self.data.iloc[-50:].copy()
+        
+        # 필터링된 데이터로 차트 생성
+        chart.plot(display_data)
         
         # 이동평균선 추가
         chart.add_moving_average([self.strategy.ma_short_period, self.strategy.ma_long_period])
@@ -174,33 +180,50 @@ class Backtest:
         # 볼린저 밴드 추가
         chart.add_bollinger_bands(period=self.strategy.bb_period, std_dev=self.strategy.bb_std_dev)
         
-        # 시장 상태 배경색 표시
-        for i in range(1, len(data)):
-            if data['trending'].iloc[i]:
-                chart.axes[0].axvspan(data.index[i-1], data.index[i], 
-                                     alpha=0.2, color='green')
-            else:
-                chart.axes[0].axvspan(data.index[i-1], data.index[i], 
-                                     alpha=0.1, color='gray')
+        # 필터링된 데이터에 해당하는 인덱스만 표시
+        filtered_idx = display_data.index
+        filtered_data = data[data.index.isin(filtered_idx)]
         
-        # 매수/매도 포인트 표시
+        # 시장 상태 배경색 표시
+        for i in range(1, len(filtered_data)):
+            idx = filtered_data.index[i-1]
+            next_idx = filtered_data.index[i]
+            
+            if idx in filtered_idx and next_idx in filtered_idx:
+                if filtered_data['trending'].iloc[i]:
+                    chart.axes[0].axvspan(idx, next_idx, 
+                                        alpha=0.2, color='green')
+                else:
+                    chart.axes[0].axvspan(idx, next_idx, 
+                                        alpha=0.1, color='gray')
+        
+        # 매수/매도 포인트 표시 - 필터링된 기간 내 거래만 표시
         for trade in result.trades:
-            # 매수 지점
-            chart.annotate("B", 
-                         (trade['entry_date'], self.data.loc[trade['entry_date'], 'low'] * 0.99), 
-                         color='green', arrow=True)
+            entry_date = trade['entry_date']
+            exit_date = trade['exit_date']
             
-            # 매도 지점
-            chart.annotate("S", 
-                         (trade['exit_date'], self.data.loc[trade['exit_date'], 'high'] * 1.01), 
-                         color='red', arrow=True)
-            
-            # 수익률 표시
-            pnl_text = f"{trade['pnl_pct']*100:.1f}%"
-            color = 'green' if trade['pnl'] > 0 else 'red'
-            chart.annotate(pnl_text, 
-                         (trade['exit_date'], self.data.loc[trade['exit_date'], 'high'] * 1.03), 
-                         color=color, arrow=False)
+            # 표시 기간 내 거래만 필터링
+            if entry_date in filtered_idx or exit_date in filtered_idx:
+                # 매수 지점이 표시 범위 내에 있는 경우
+                if entry_date in filtered_idx:
+                    # 매수 지점 - 더 크고 뚜렷하게 표시
+                    chart.annotate("BUY", 
+                                (entry_date, display_data.loc[entry_date, 'low'] * 0.995), 
+                                color='green', arrow=True)
+                
+                # 매도 지점이 표시 범위 내에 있는 경우
+                if exit_date in filtered_idx:
+                    # 매도 지점 - 더 크고 뚜렷하게 표시
+                    chart.annotate("SELL", 
+                                (exit_date, display_data.loc[exit_date, 'high'] * 1.005), 
+                                color='red', arrow=True)
+                    
+                    # 수익률 표시
+                    pnl_text = f"{trade['pnl_pct']*100:.1f}%"
+                    color = 'green' if trade['pnl'] > 0 else 'red'
+                    chart.annotate(pnl_text, 
+                                (exit_date, display_data.loc[exit_date, 'high'] * 1.01), 
+                                color=color, arrow=False)
         
         # 백테스트 정보 텍스트 추가
         info_text = (
@@ -210,11 +233,13 @@ class Backtest:
             f"Win Rate: {result.win_rate*100:.1f}%"
         )
         chart.axes[0].text(0.02, 0.05, info_text, transform=chart.axes[0].transAxes, 
-                          fontsize=10, bbox=dict(facecolor='white', alpha=0.7))
+                          fontsize=12, bbox=dict(facecolor='white', alpha=0.7))
         
         # 자산 가치 패널 추가
         equity_ax = chart.fig.add_axes([0.1, 0.05, 0.8, 0.15])
-        equity_ax.plot(result.equity, color='blue', linewidth=1.5)
+        
+        # 자산 가치는 전체 기간 표시 (필터링 안함)
+        equity_ax.plot(result.equity.loc[filtered_idx], color='blue', linewidth=1.5)
         equity_ax.set_title('Equity Curve')
         equity_ax.grid(True, alpha=0.3)
         
