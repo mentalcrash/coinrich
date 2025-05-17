@@ -17,7 +17,7 @@ def test_bollinger_band_width():
     
     # 데이터 가져오기
     service = CandleService()
-    candles = service.get_minute_candles("KRW-BTC", unit=30, count=100)
+    candles = service.get_minute_candles("KRW-BTC", unit=30, count=200)
     
     # DataFrame으로 변환
     candle_data = []
@@ -81,7 +81,7 @@ def test_adx():
     
     # 데이터 가져오기
     service = CandleService()
-    candles = service.get_minute_candles("KRW-BTC", unit=15, count=200)
+    candles = service.get_minute_candles("KRW-BTC", unit=30, count=200)
     
     # DataFrame으로 변환
     candle_data = []
@@ -143,7 +143,7 @@ def test_trending_market():
     
     # 데이터 가져오기
     service = CandleService()
-    candles = service.get_minute_candles("KRW-BTC", unit=60, count=200)
+    candles = service.get_minute_candles("KRW-BTC", unit=30, count=200)
     
     # DataFrame으로 변환
     candle_data = []
