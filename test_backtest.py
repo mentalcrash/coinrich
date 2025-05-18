@@ -37,6 +37,8 @@ def test_adaptive_strategy():
     strategy_params = {
         'adx_threshold': 25,           # ADX 임계값
         'chop_threshold': 38.2,        # Choppiness Index 임계값
+        'adx_period': 14,              # ADX 계산 기간
+        'chop_period': 14,             # Choppiness Index 계산 기간
         'ma_short_period': 5,          # 단기 이동평균
         'ma_long_period': 20,          # 장기 이동평균
         'bb_period': 20,               # 볼린저 밴드 기간

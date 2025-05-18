@@ -24,6 +24,8 @@ class AdaptivePositionStrategy:
         # 시장 상태 판별 파라미터
         self.adx_threshold = self.params.get('adx_threshold', 25)
         self.chop_threshold = self.params.get('chop_threshold', 38.2)
+        self.adx_period = self.params.get('adx_period', 14)
+        self.chop_period = self.params.get('chop_period', 14)
         
         # 이동평균선 파라미터
         self.ma_short_period = self.params.get('ma_short_period', 20)
@@ -54,7 +56,9 @@ class AdaptivePositionStrategy:
         trending, adx_values, chop_values = is_trending_market(
             data, 
             adx_threshold=self.adx_threshold, 
-            chop_threshold=self.chop_threshold
+            chop_threshold=self.chop_threshold,
+            adx_period=self.adx_period,
+            chop_period=self.chop_period
         )
         return trending, adx_values, chop_values
     
