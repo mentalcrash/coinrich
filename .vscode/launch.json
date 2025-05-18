@@ -2,10 +2,106 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "실행: test.py",
+            "name": "실행: trend_analyzer (BTC-15m+MA)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/test.py",
+            "program": "${workspaceFolder}/trend_analyzer.py",
+            "args": [
+                "--market=KRW-BTC",
+                "--unit=15",
+                "--count=400",
+                "--adx-threshold=25",
+                "--chop-threshold=38.2",
+                "--short-ma=5",
+                "--mid-ma=20",
+                "--long-ma=60",
+                "--use-ma-alignment"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "UPBIT_ACCESS_KEY": "${env:UPBIT_ACCESS_KEY}",
+                "UPBIT_SECRET_KEY": "${env:UPBIT_SECRET_KEY}"
+            }
+        },
+        {
+            "name": "실행: trend_analyzer (ETH-15m+MA)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/trend_analyzer.py",
+            "args": [
+                "--market=KRW-ETH",
+                "--unit=15",
+                "--count=600",
+                "--adx-threshold=25",
+                "--chop-threshold=38.2",
+                "--short-ma=8",
+                "--mid-ma=21",
+                "--long-ma=55",
+                "--use-ma-alignment"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "UPBIT_ACCESS_KEY": "${env:UPBIT_ACCESS_KEY}",
+                "UPBIT_SECRET_KEY": "${env:UPBIT_SECRET_KEY}"
+            }
+        },
+        {
+            "name": "실행: trend_analyzer (XRP-15m+MA)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/trend_analyzer.py",
+            "args": [
+                "--market=KRW-XRP",
+                "--unit=15",
+                "--count=600",
+                "--adx-threshold=25",
+                "--chop-threshold=42",
+                "--short-ma=5",
+                "--mid-ma=15",
+                "--long-ma=50",
+                "--use-ma-alignment"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "UPBIT_ACCESS_KEY": "${env:UPBIT_ACCESS_KEY}",
+                "UPBIT_SECRET_KEY": "${env:UPBIT_SECRET_KEY}"
+            }
+        },
+        {
+            "name": "실행: trend_analyzer (BTC-15m 기본)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/trend_analyzer.py",
+            "args": [
+                "--market=KRW-BTC",
+                "--unit=15",
+                "--count=400",
+                "--adx-threshold=25",
+                "--chop-threshold=38.2"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "UPBIT_ACCESS_KEY": "${env:UPBIT_ACCESS_KEY}",
+                "UPBIT_SECRET_KEY": "${env:UPBIT_SECRET_KEY}"
+            }
+        },
+        {
+            "name": "실행: test_backtest.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_backtest.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "cwd": "${workspaceFolder}",

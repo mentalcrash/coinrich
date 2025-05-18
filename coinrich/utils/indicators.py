@@ -325,33 +325,92 @@ def adx(data: pd.DataFrame, period: int = 14) -> Dict[str, pd.Series]:
 
 
 def is_trending_market(data: pd.DataFrame, adx_threshold: float = 25.0, 
-                       bb_width_percentile: float = 70.0, lookback: int = 20) -> pd.Series:
+                       chop_threshold: float = 38.2, 
+                       short_ma: int = 5, mid_ma: int = 20, long_ma: int = 60,
+                       use_ma_alignment: bool = False) -> pd.Series:
     """추세장 여부 판단
     
-    ADX와 볼린저 밴드 폭을 기반으로 추세장 여부를 판단합니다.
-    ADX가 높고 볼린저 밴드 폭이 넓으면 추세장으로 판단합니다.
+    ADX와 Choppiness Index를 기반으로 추세장 여부를 판단합니다.
+    ADX가 높고 Choppiness Index가 낮으면 추세장으로 판단합니다.
+    use_ma_alignment가 True인 경우 이동평균선 정렬도 조건에 추가합니다.
     
     Args:
         data: OHLCV 데이터프레임
         adx_threshold: ADX 임계값 (이 값보다 크면 추세장으로 간주)
-        bb_width_percentile: 볼린저 밴드 폭 백분위수 임계값
-        lookback: 볼린저 밴드 폭 백분위 계산 기간
+        chop_threshold: Choppiness Index 임계값 (이 값보다 작으면 추세장으로 간주)
+        short_ma: 단기 이동평균 기간
+        mid_ma: 중기 이동평균 기간
+        long_ma: 장기 이동평균 기간
+        use_ma_alignment: 이동평균선 정렬 조건 사용 여부
         
     Returns:
-        추세장 여부 시리즈 (True/False)
+        추세장 여부 시리즈 (True/False), ADX 값, Choppiness Index 값
     """
     # ADX 계산
     adx_values = adx(data)['adx']
     
-    # 볼린저 밴드 폭 계산
-    bb_width = bollinger_band_width(data)
+    # Choppiness Index 계산
+    chop = choppiness_index(data)
     
-    # 볼린저 밴드 폭 백분위 계산 (rolling window)
-    bb_width_rank = bb_width.rolling(window=lookback).apply(
-        lambda x: pd.Series(x).rank(pct=True).iloc[-1] * 100
-    )
+    # 기본 추세장 판단 조건
+    trending = (adx_values >= adx_threshold) & (chop <= chop_threshold)
     
-    # 추세장 판단
-    trending = (adx_values > adx_threshold) & (bb_width_rank > bb_width_percentile)
+    # 이동평균선 정렬 조건 추가
+    if use_ma_alignment:
+        # 이동평균선 계산
+        short_ma_values = moving_average(data, short_ma)
+        mid_ma_values = moving_average(data, mid_ma)
+        long_ma_values = moving_average(data, long_ma)
+        
+        # 상승 추세: 단기 > 중기 > 장기
+        uptrend_aligned = (short_ma_values > mid_ma_values) & (mid_ma_values > long_ma_values)
+        
+        # 하락 추세: 단기 < 중기 < 장기
+        downtrend_aligned = (short_ma_values < mid_ma_values) & (mid_ma_values < long_ma_values)
+        
+        # 어떤 방향이든 정렬되었을 때만 추세장으로 판단
+        ma_aligned = uptrend_aligned | downtrend_aligned
+        
+        # 기존 조건과 이동평균선 정렬 조건을 모두 만족해야 추세장으로 판단
+        trending = trending & ma_aligned
     
-    return trending, adx_values, bb_width 
+    return trending, adx_values, chop
+
+
+def choppiness_index(data: pd.DataFrame, period: int = 14) -> pd.Series:
+    """Choppiness Index 계산
+    
+    시장이 추세장인지 횡보장인지 판단하는 지표로,
+    0-100 사이의 값을 가지며 값이 높을수록(>60) 횡보장, 낮을수록(<40) 추세장으로 간주함
+    
+    Args:
+        data: OHLCV 데이터프레임
+        period: 계산에 사용할 기간
+        
+    Returns:
+        Choppiness Index 시리즈
+    """
+    high = data['high']
+    low = data['low']
+    close = data['close']
+
+    # True Range 계산
+    prev_close = close.shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs()
+    ], axis=1).max(axis=1)
+
+    # ATR = TR의 n기간 이동합
+    atr_sum = tr.rolling(window=period).sum()
+
+    # n기간 동안의 최고가, 최저가
+    high_max = high.rolling(window=period).max()
+    low_min = low.rolling(window=period).min()
+    price_range = high_max - low_min
+
+    # Chop 계산
+    chop = 100 * np.log10(atr_sum / price_range) / np.log10(period)
+    
+    return chop 

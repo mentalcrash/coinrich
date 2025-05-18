@@ -23,7 +23,7 @@ class AdaptivePositionStrategy:
         
         # 시장 상태 판별 파라미터
         self.adx_threshold = self.params.get('adx_threshold', 25)
-        self.bb_width_percentile = self.params.get('bb_width_percentile', 70)
+        self.chop_threshold = self.params.get('chop_threshold', 38.2)
         
         # 이동평균선 파라미터
         self.ma_short_period = self.params.get('ma_short_period', 20)
@@ -49,14 +49,14 @@ class AdaptivePositionStrategy:
             data: OHLCV 데이터프레임
             
         Returns:
-            (trending, adx_values, bb_width): 추세장 여부, ADX 값, BB 폭
+            (trending, adx_values, chop_values): 추세장 여부, ADX 값, Choppiness Index 값
         """
-        trending, adx_values, bb_width = is_trending_market(
+        trending, adx_values, chop_values = is_trending_market(
             data, 
             adx_threshold=self.adx_threshold, 
-            bb_width_percentile=self.bb_width_percentile
+            chop_threshold=self.chop_threshold
         )
-        return trending, adx_values, bb_width
+        return trending, adx_values, chop_values
     
     def detect_market_state_change(self, trending: pd.Series, lookback: int = 1) -> pd.Series:
         """시장 상태 변화 감지

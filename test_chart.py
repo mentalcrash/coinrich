@@ -38,7 +38,7 @@ def test_indicator_chart():
     
     # 데이터 가져오기 (캐시 활용)
     service = CandleService()
-    candles = service.get_minute_candles("KRW-BTC", unit=30, count=100)
+    candles = service.get_minute_candles("KRW-BTC", unit=30, count=500)
     
     # 차트 생성
     chart = CandleChart(title="BTC/KRW - 30분봉 (지표 포함)", style="upbit")
@@ -174,7 +174,7 @@ def test_korean_candle_style_class():
     
     # 데이터 가져오기 (캐시 활용)
     service = CandleService()
-    candles = service.get_minute_candles("KRW-BTC", unit=15, count=100)
+    candles = service.get_minute_candles("KRW-BTC", unit=60, count=400)
     
     # 차트 생성 (한국식 스타일)
     chart = CandleChart(title="BTC/KRW - 15분봉 (한국식 색상 - 클래스)", style="korean")

@@ -143,7 +143,7 @@ def test_trending_market():
     
     # 데이터 가져오기
     service = CandleService()
-    candles = service.get_minute_candles("KRW-BTC", unit=30, count=200)
+    candles = service.get_minute_candles("KRW-BTC", unit=15, count=600)
     
     # DataFrame으로 변환
     candle_data = []
@@ -162,7 +162,7 @@ def test_trending_market():
     df.sort_index(inplace=True)
     
     # 추세장 판별
-    trending, adx_values, bb_width = is_trending_market(df, adx_threshold=25, bb_width_percentile=70)
+    trending, adx_values, bb_width = is_trending_market(df, adx_threshold=25, bb_width_percentile=60)
     
     # 추세장 및 횡보장 통계
     trend_count = trending.sum()
@@ -215,6 +215,6 @@ def test_trending_market():
 
 if __name__ == "__main__":
     # 테스트할 함수 선택하여 실행
-    test_bollinger_band_width()
-    test_adx()
+    # test_bollinger_band_width()
+    # test_adx()
     test_trending_market() 

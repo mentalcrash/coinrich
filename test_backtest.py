@@ -36,8 +36,8 @@ def test_adaptive_strategy():
     # 전략 파라미터
     strategy_params = {
         'adx_threshold': 25,           # ADX 임계값
-        'bb_width_percentile': 70,     # 볼린저 밴드 폭 백분위수
-        'ma_short_period': 5,         # 단기 이동평균
+        'chop_threshold': 38.2,        # Choppiness Index 임계값
+        'ma_short_period': 5,          # 단기 이동평균
         'ma_long_period': 20,          # 장기 이동평균
         'bb_period': 20,               # 볼린저 밴드 기간
         'bb_std_dev': 2.0,             # 볼린저 밴드 표준편차

@@ -8,8 +8,8 @@ from datetime import datetime
 
 from coinrich.service.candle_service import CandleService
 from coinrich.utils.indicators import (
-    bollinger_bands, bollinger_band_width, 
-    adx, is_trending_market
+    moving_average, 
+    adx, is_trending_market, choppiness_index
 )
 
 
@@ -24,8 +24,16 @@ def parse_arguments():
                         help='분석할 캔들 개수')
     parser.add_argument('--adx-threshold', type=float, default=25,
                         help='ADX 임계값 (추세 강도 판단 기준)')
-    parser.add_argument('--bb-percentile', type=float, default=60,
-                        help='볼린저 밴드 폭 백분위수 (횡보장 판단 기준)')
+    parser.add_argument('--chop-threshold', type=float, default=38.2,
+                        help='Choppiness Index 임계값 (이 값보다 작으면 추세장으로 간주)')
+    parser.add_argument('--short-ma', type=int, default=5,
+                        help='단기 이동평균 기간')
+    parser.add_argument('--mid-ma', type=int, default=20,
+                        help='중기 이동평균 기간')
+    parser.add_argument('--long-ma', type=int, default=60,
+                        help='장기 이동평균 기간')
+    parser.add_argument('--use-ma-alignment', action='store_true',
+                        help='이동평균선 정렬 조건 사용 여부')
     parser.add_argument('--output-dir', type=str, default='charts',
                         help='차트 저장 디렉토리')
     
@@ -59,15 +67,23 @@ def fetch_data(market, unit, count):
     return df
 
 
-def analyze_trend(df, adx_threshold, bb_percentile):
+def analyze_trend(df, adx_threshold, chop_threshold, short_ma, mid_ma, long_ma, use_ma_alignment):
     """추세장 판별 분석"""
-    print(f"\n=== 추세장 판별 분석 (ADX 임계값: {adx_threshold}, BB 폭 백분위수: {bb_percentile}) ===")
+    print(f"\n=== 추세장 판별 분석 ===")
+    print(f"ADX 임계값: {adx_threshold}, Choppiness Index 임계값: {chop_threshold}")
+    
+    if use_ma_alignment:
+        print(f"이동평균선 정렬 조건 사용: 단기({short_ma}), 중기({mid_ma}), 장기({long_ma})")
     
     # 추세장 판별
-    trending, adx_values, bb_width = is_trending_market(
+    trending, adx_values, chop_values = is_trending_market(
         df, 
         adx_threshold=adx_threshold, 
-        bb_width_percentile=bb_percentile
+        chop_threshold=chop_threshold,
+        short_ma=short_ma,
+        mid_ma=mid_ma,
+        long_ma=long_ma,
+        use_ma_alignment=use_ma_alignment
     )
     
     # 추세장 및 횡보장 통계
@@ -79,10 +95,10 @@ def analyze_trend(df, adx_threshold, bb_percentile):
     print(f"추세장 구간 수: {trend_count} ({trend_percent:.1f}%)")
     print(f"횡보장 구간 수: {total_count - trend_count} ({100 - trend_percent:.1f}%)")
     
-    return trending, adx_values, bb_width, trend_percent
+    return trending, adx_values, chop_values, trend_percent
 
 
-def visualize_results(df, trending, adx_values, bb_width, params):
+def visualize_results(df, trending, adx_values, chop_values, params):
     """결과 시각화 및 저장"""
     print("\n=== 결과 시각화 및 저장 ===")
     
@@ -95,6 +111,16 @@ def visualize_results(df, trending, adx_values, bb_width, params):
     
     # 상단 차트 - 가격 및 추세장 배경 표시
     ax1.plot(df.index, df['close'], label=f"{params['market']} Price", color='#333333')
+    
+    # 이동평균선 표시 (MA 정렬 조건을 사용하는 경우에만)
+    if params['use_ma_alignment']:
+        short_ma = moving_average(df, params['short_ma'])
+        mid_ma = moving_average(df, params['mid_ma'])
+        long_ma = moving_average(df, params['long_ma'])
+        
+        ax1.plot(df.index, short_ma, label=f"MA{params['short_ma']}", color='#f48024', alpha=0.8)
+        ax1.plot(df.index, mid_ma, label=f"MA{params['mid_ma']}", color='#5eba7d', alpha=0.8)
+        ax1.plot(df.index, long_ma, label=f"MA{params['long_ma']}", color='#0077cc', alpha=0.8)
     
     # 연속된 추세 구간 최적화하여 표시
     trend_blocks = []  # (시작 인덱스, 종료 인덱스, 추세 여부)
@@ -133,14 +159,11 @@ def visualize_results(df, trending, adx_values, bb_width, params):
     ax2.legend()
     ax2.grid(True, alpha=0.3)
     
-    # 하단 차트 - 볼린저 밴드 폭
-    # BB 폭 백분위수 계산
-    bb_percentile_value = np.percentile(bb_width.dropna(), params['bb_percentile'])
-    
-    ax3.plot(bb_width.index, bb_width, label='BB Width', color='blue')
-    ax3.axhline(y=bb_percentile_value, color='red', linestyle='--', 
-               label=f"BB Width {params['bb_percentile']}th Percentile")
-    ax3.set_title('Bollinger Band Width')
+    # 하단 차트 - Choppiness Index
+    ax3.plot(chop_values.index, chop_values, label='Choppiness Index', color='blue')
+    ax3.axhline(y=params['chop_threshold'], color='red', linestyle='--', 
+               label=f"Chop Threshold ({params['chop_threshold']})")
+    ax3.set_title('Choppiness Index (Low = Trending, High = Ranging)')
     ax3.legend()
     ax3.grid(True, alpha=0.3)
     
@@ -150,9 +173,19 @@ def visualize_results(df, trending, adx_values, bb_width, params):
         f"Market: {params['market']}\n"
         f"Timeframe: {params['unit']}min\n"
         f"ADX Threshold: {params['adx_threshold']}\n"
-        f"BB Width Percentile: {params['bb_percentile']}\n"
-        f"Data Period: {df.index[0].strftime('%Y-%m-%d %H:%M')} ~ {df.index[-1].strftime('%Y-%m-%d %H:%M')}"
+        f"Choppiness Threshold: {params['chop_threshold']}\n"
     )
+    
+    # MA 정렬 조건을 사용하는 경우 파라미터 정보에 추가
+    if params['use_ma_alignment']:
+        parameter_text += (
+            f"MA Alignment: Enabled\n"
+            f"Short MA: {params['short_ma']}\n"
+            f"Mid MA: {params['mid_ma']}\n"
+            f"Long MA: {params['long_ma']}\n"
+        )
+    
+    parameter_text += f"Data Period: {df.index[0].strftime('%Y-%m-%d %H:%M')} ~ {df.index[-1].strftime('%Y-%m-%d %H:%M')}"
     
     # 텍스트 표시
     plt.figtext(0.01, 0.01, parameter_text, fontsize=10,
@@ -161,7 +194,13 @@ def visualize_results(df, trending, adx_values, bb_width, params):
     plt.tight_layout(rect=[0, 0.03, 1, 0.97])  # 하단 여백 확보
     
     # 파일명에 파라미터 포함
-    filename = f"trend_analysis_{params['market'].replace('-', '_')}_{params['unit']}min_ADX{params['adx_threshold']}_BB{params['bb_percentile']}.png"
+    filename = f"trend_analysis_{params['market'].replace('-', '_')}_{params['unit']}min_ADX{params['adx_threshold']}_CHOP{params['chop_threshold']}"
+    
+    # MA 정렬 조건을 사용하는 경우 파일명에 추가
+    if params['use_ma_alignment']:
+        filename += f"_MA{params['short_ma']}_{params['mid_ma']}_{params['long_ma']}"
+    
+    filename += ".png"
     filepath = os.path.join(params['output_dir'], filename)
     
     plt.savefig(filepath, dpi=300)
@@ -190,7 +229,11 @@ def main():
         'unit': args.unit,
         'count': args.count, 
         'adx_threshold': args.adx_threshold,
-        'bb_percentile': args.bb_percentile,
+        'chop_threshold': args.chop_threshold,
+        'short_ma': args.short_ma,
+        'mid_ma': args.mid_ma,
+        'long_ma': args.long_ma,
+        'use_ma_alignment': args.use_ma_alignment,
         'output_dir': args.output_dir
     }
     
@@ -198,12 +241,18 @@ def main():
     df = fetch_data(params['market'], params['unit'], params['count'])
     
     # 추세장 분석
-    trending, adx_values, bb_width, trend_percent = analyze_trend(
-        df, params['adx_threshold'], params['bb_percentile']
+    trending, adx_values, chop_values, trend_percent = analyze_trend(
+        df, 
+        params['adx_threshold'], 
+        params['chop_threshold'],
+        params['short_ma'],
+        params['mid_ma'],
+        params['long_ma'],
+        params['use_ma_alignment']
     )
     
     # 결과 시각화
-    fig, results = visualize_results(df, trending, adx_values, bb_width, params)
+    fig, results = visualize_results(df, trending, adx_values, chop_values, params)
     
     # 결과 출력
     print("\n=== 분석 결과 요약 ===")
