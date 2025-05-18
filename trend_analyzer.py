@@ -2,6 +2,8 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from matplotlib.ticker import FuncFormatter
 import os
 import argparse
 from datetime import datetime
@@ -11,6 +13,23 @@ from coinrich.utils.indicators import (
     moving_average, 
     adx, is_trending_market, choppiness_index
 )
+
+try:
+    from mplfinance.original_flavor import candlestick_ohlc
+except ImportError:
+    # 대체 가능한 패키지 또는 모듈
+    try:
+        from matplotlib.finance import candlestick_ohlc
+    except ImportError:
+        try:
+            from mpl_finance import candlestick_ohlc
+        except ImportError:
+            # 에러 메시지
+            print("경고: 캔들스틱 차트를 위한 패키지를 설치해주세요")
+            print("pip install mplfinance")
+            def candlestick_ohlc(ax, quotes, **kwargs):
+                # 기본 선 그래프로 대체
+                ax.plot([q[0] for q in quotes], [q[4] for q in quotes], 'k-')
 
 
 def parse_arguments():
@@ -26,14 +45,10 @@ def parse_arguments():
                         help='ADX 임계값 (추세 강도 판단 기준)')
     parser.add_argument('--chop-threshold', type=float, default=38.2,
                         help='Choppiness Index 임계값 (이 값보다 작으면 추세장으로 간주)')
-    parser.add_argument('--short-ma', type=int, default=5,
-                        help='단기 이동평균 기간')
-    parser.add_argument('--mid-ma', type=int, default=20,
-                        help='중기 이동평균 기간')
-    parser.add_argument('--long-ma', type=int, default=60,
-                        help='장기 이동평균 기간')
-    parser.add_argument('--use-ma-alignment', action='store_true',
-                        help='이동평균선 정렬 조건 사용 여부')
+    parser.add_argument('--adx-period', type=int, default=14,
+                        help='ADX 계산 기간')
+    parser.add_argument('--chop-period', type=int, default=14,
+                        help='Choppiness Index 계산 기간')
     parser.add_argument('--output-dir', type=str, default='charts',
                         help='차트 저장 디렉토리')
     
@@ -67,23 +82,19 @@ def fetch_data(market, unit, count):
     return df
 
 
-def analyze_trend(df, adx_threshold, chop_threshold, short_ma, mid_ma, long_ma, use_ma_alignment):
+def analyze_trend(df, adx_threshold, chop_threshold, adx_period, chop_period):
     """추세장 판별 분석"""
     print(f"\n=== 추세장 판별 분석 ===")
     print(f"ADX 임계값: {adx_threshold}, Choppiness Index 임계값: {chop_threshold}")
-    
-    if use_ma_alignment:
-        print(f"이동평균선 정렬 조건 사용: 단기({short_ma}), 중기({mid_ma}), 장기({long_ma})")
+    print(f"ADX 계산 기간: {adx_period}, Choppiness Index 계산 기간: {chop_period}")
     
     # 추세장 판별
     trending, adx_values, chop_values = is_trending_market(
         df, 
         adx_threshold=adx_threshold, 
         chop_threshold=chop_threshold,
-        short_ma=short_ma,
-        mid_ma=mid_ma,
-        long_ma=long_ma,
-        use_ma_alignment=use_ma_alignment
+        adx_period=adx_period,
+        chop_period=chop_period
     )
     
     # 추세장 및 횡보장 통계
@@ -105,22 +116,22 @@ def visualize_results(df, trending, adx_values, chop_values, params):
     # 차트 저장 디렉토리 생성
     os.makedirs(params['output_dir'], exist_ok=True)
     
-    # 시각화
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(15, 12), 
-                                       gridspec_kw={'height_ratios': [3, 1, 1]})
+    # 시각화 - X축 공유 설정
+    fig, axs = plt.subplots(3, 1, figsize=(15, 12), 
+                            gridspec_kw={'height_ratios': [3, 1, 1]},
+                            sharex=True)  # sharex=True로 X축 공유
     
-    # 상단 차트 - 가격 및 추세장 배경 표시
-    ax1.plot(df.index, df['close'], label=f"{params['market']} Price", color='#333333')
+    ax1, ax2, ax3 = axs
     
-    # 이동평균선 표시 (MA 정렬 조건을 사용하는 경우에만)
-    if params['use_ma_alignment']:
-        short_ma = moving_average(df, params['short_ma'])
-        mid_ma = moving_average(df, params['mid_ma'])
-        long_ma = moving_average(df, params['long_ma'])
-        
-        ax1.plot(df.index, short_ma, label=f"MA{params['short_ma']}", color='#f48024', alpha=0.8)
-        ax1.plot(df.index, mid_ma, label=f"MA{params['mid_ma']}", color='#5eba7d', alpha=0.8)
-        ax1.plot(df.index, long_ma, label=f"MA{params['long_ma']}", color='#0077cc', alpha=0.8)
+    # 상단 차트 - 캔들스틱 차트로 변경
+    # 데이터 준비 - OHLC 포맷으로 변환
+    ohlc = []
+    for date, row in df.iterrows():
+        date_num = mdates.date2num(date)
+        ohlc.append([date_num, row['open'], row['high'], row['low'], row['close']])
+    
+    # 캔들스틱 차트 그리기
+    candlestick_ohlc(ax1, ohlc, width=0.6/(24*60/params['unit']), colorup='green', colordown='red')
     
     # 연속된 추세 구간 최적화하여 표시
     trend_blocks = []  # (시작 인덱스, 종료 인덱스, 추세 여부)
@@ -140,15 +151,16 @@ def visualize_results(df, trending, adx_values, chop_values, params):
     
     # 추세 블록 표시
     for start, end, is_trend in trend_blocks:
+        start_num = mdates.date2num(start)
+        end_num = mdates.date2num(end)
         if is_trend:
-            ax1.axvspan(start, end, alpha=0.2, color='green')
+            ax1.axvspan(start_num, end_num, alpha=0.2, color='green')
         else:
-            ax1.axvspan(start, end, alpha=0.1, color='gray')
+            ax1.axvspan(start_num, end_num, alpha=0.1, color='gray')
     
     # 추세장 비율 포함한 제목
     trend_percent = trending.sum() / len(trending) * 100
     ax1.set_title(f"{params['market']} Price with Trend Analysis - {trend_percent:.1f}% Trending")
-    ax1.legend()
     ax1.grid(True, alpha=0.3)
     
     # 중간 차트 - ADX
@@ -167,6 +179,14 @@ def visualize_results(df, trending, adx_values, chop_values, params):
     ax3.legend()
     ax3.grid(True, alpha=0.3)
     
+    # X축 날짜 포맷 설정 - 맨 아래 차트에만 표시
+    ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
+    plt.setp(ax3.get_xticklabels(), rotation=45, ha='right')
+    
+    # 상단 두 차트의 X축 레이블 숨기기
+    plt.setp(ax1.get_xticklabels(), visible=False)
+    plt.setp(ax2.get_xticklabels(), visible=False)
+    
     # 파라미터 정보 추가
     parameter_text = (
         f"Parameters:\n"
@@ -174,16 +194,9 @@ def visualize_results(df, trending, adx_values, chop_values, params):
         f"Timeframe: {params['unit']}min\n"
         f"ADX Threshold: {params['adx_threshold']}\n"
         f"Choppiness Threshold: {params['chop_threshold']}\n"
+        f"ADX Period: {params['adx_period']}\n"
+        f"Choppiness Period: {params['chop_period']}\n"
     )
-    
-    # MA 정렬 조건을 사용하는 경우 파라미터 정보에 추가
-    if params['use_ma_alignment']:
-        parameter_text += (
-            f"MA Alignment: Enabled\n"
-            f"Short MA: {params['short_ma']}\n"
-            f"Mid MA: {params['mid_ma']}\n"
-            f"Long MA: {params['long_ma']}\n"
-        )
     
     parameter_text += f"Data Period: {df.index[0].strftime('%Y-%m-%d %H:%M')} ~ {df.index[-1].strftime('%Y-%m-%d %H:%M')}"
     
@@ -196,11 +209,7 @@ def visualize_results(df, trending, adx_values, chop_values, params):
     # 파일명에 파라미터 포함
     filename = f"trend_analysis_{params['market'].replace('-', '_')}_{params['unit']}min_ADX{params['adx_threshold']}_CHOP{params['chop_threshold']}"
     
-    # MA 정렬 조건을 사용하는 경우 파일명에 추가
-    if params['use_ma_alignment']:
-        filename += f"_MA{params['short_ma']}_{params['mid_ma']}_{params['long_ma']}"
-    
-    filename += ".png"
+    filename += f"_ADXp{params['adx_period']}_CHOPp{params['chop_period']}.png"
     filepath = os.path.join(params['output_dir'], filename)
     
     plt.savefig(filepath, dpi=300)
@@ -230,10 +239,8 @@ def main():
         'count': args.count, 
         'adx_threshold': args.adx_threshold,
         'chop_threshold': args.chop_threshold,
-        'short_ma': args.short_ma,
-        'mid_ma': args.mid_ma,
-        'long_ma': args.long_ma,
-        'use_ma_alignment': args.use_ma_alignment,
+        'adx_period': args.adx_period,
+        'chop_period': args.chop_period,
         'output_dir': args.output_dir
     }
     
@@ -245,10 +252,8 @@ def main():
         df, 
         params['adx_threshold'], 
         params['chop_threshold'],
-        params['short_ma'],
-        params['mid_ma'],
-        params['long_ma'],
-        params['use_ma_alignment']
+        params['adx_period'],
+        params['chop_period']
     )
     
     # 결과 시각화
