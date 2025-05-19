@@ -3,7 +3,19 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional, Union, Any
 
 from coinrich.utils.indicators import (
-    moving_average, bollinger_bands, rsi, adx, is_trending_market
+    moving_average, bollinger_bands, rsi, adx, is_trending_market, macd, atr
+)
+from coinrich.utils.signals import (
+    rsi_bollinger_buy_signal,
+    macd_histogram_volume_buy_signal,
+    bullish_engulfing_ema_buy_signal,
+    fixed_risk_exit_signal,
+    macd_histogram_exit_signal,
+    rsi_overbought_reversal_exit_signal,
+    trailing_stop_exit_signal,
+    strong_macd_volume_signal,
+    atr_risk_exit_signal,
+    ema_pullback_buy_signal
 )
 
 
@@ -44,23 +56,23 @@ class AdaptivePositionStrategy:
         self.take_profit = self.params.get('take_profit', 0.05)  # 5% 익절
         self.stop_loss = self.params.get('stop_loss', 0.02)  # 2% 손절
         
-    def analyze_market(self, data: pd.DataFrame) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    def analyze_market(self, data: pd.DataFrame) -> Tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
         """시장 상태 분석
         
         Args:
             data: OHLCV 데이터프레임
             
         Returns:
-            (trending, adx_values, chop_values): 추세장 여부, ADX 값, Choppiness Index 값
+            (trending, adx_values, chop_values, trend_direction): 추세장 여부, ADX 값, Choppiness Index 값, 추세 방향
         """
-        trending, adx_values, chop_values = is_trending_market(
+        trending, adx_values, chop_values, trend_direction = is_trending_market(
             data, 
             adx_threshold=self.adx_threshold, 
             chop_threshold=self.chop_threshold,
             adx_period=self.adx_period,
             chop_period=self.chop_period
         )
-        return trending, adx_values, chop_values
+        return trending, adx_values, chop_values, trend_direction
     
     def detect_market_state_change(self, trending: pd.Series, lookback: int = 1) -> pd.Series:
         """시장 상태 변화 감지
@@ -111,96 +123,77 @@ class AdaptivePositionStrategy:
         df['plus_di'] = adx_result['plus_di']
         df['minus_di'] = adx_result['minus_di']
         
+        # MACD
+        macd_result = macd(df)
+        df['macd'] = macd_result['macd']
+        df['signal'] = macd_result['signal']
+        df['histogram'] = macd_result['histogram']
+
+        df['atr'] = atr(df)
+        
         return df
     
-    def entry_signals(self, data: pd.DataFrame, trending: pd.Series) -> pd.Series:
-        """매수 신호 생성 (포지션 없을 때)
+    def entry_signals(self, data: pd.DataFrame) -> pd.Series:
+        """매수 신호 생성 (포지션 없을 때)"""
+        # 보편적 매수 조건 (추세/횡보 무관)
+        signal_rsi_bb = rsi_bollinger_buy_signal(data, self.rsi_oversold)
+        signal_macd_vol = macd_histogram_volume_buy_signal(data)
+        signal_candle_ema = bullish_engulfing_ema_buy_signal(data, ema_period=self.ma_short_period)
+        signal_pullback = ema_pullback_buy_signal(data, ema_period=20)
+
+        # Strong signal: MACD-volume + 강한 거래량
         
-        Args:
-            data: 지표가 계산된 데이터프레임
-            trending: 추세장 여부 시리즈
-            
-        Returns:
-            매수 시그널 시리즈 (True/False)
-        """
-        buy_signals = pd.Series(False, index=data.index)
-        
-        for i in range(1, len(data)):
-            if trending.iloc[i]:
-                # 추세장 매수 전략: 골든 크로스 또는 +DI > -DI
-                golden_cross = (data.loc[data.index[i], 'ma_short'] > data.loc[data.index[i], 'ma_long'] and 
-                               data.loc[data.index[i-1], 'ma_short'] <= data.loc[data.index[i-1], 'ma_long'])
-                
-                di_cross = (data.loc[data.index[i], 'plus_di'] > data.loc[data.index[i], 'minus_di'] and
-                           data.loc[data.index[i-1], 'plus_di'] <= data.loc[data.index[i-1], 'minus_di'])
-                
-                if golden_cross or di_cross:
-                    buy_signals.loc[data.index[i]] = True
-            else:
-                # 횡보장 매수 전략: 볼린저 하단 터치 또는 RSI 과매도
-                bb_bottom = data.loc[data.index[i], 'close'] <= data.loc[data.index[i], 'bb_lower']
-                rsi_oversold = data.loc[data.index[i], 'rsi'] < self.rsi_oversold
-                
-                if bb_bottom or rsi_oversold:
-                    buy_signals.loc[data.index[i]] = True
-        
+        strong_signal = strong_macd_volume_signal(data, volume_multiplier=1.2)
+
+        # Base entry: 2개 이상 신호
+        combined_hits = (
+            1*signal_rsi_bb.astype(int) +
+            2*signal_macd_vol.astype(int) +
+            1*signal_candle_ema.astype(int) +
+            1*signal_pullback.astype(int)
+        )
+        base_entry = combined_hits >= 2
+        buy_signals = base_entry | strong_signal
+
         return buy_signals
     
-    def exit_signals(self, data: pd.DataFrame, trending: pd.Series, 
-                    position_open_price: Optional[float] = None) -> pd.Series:
-        """매도 신호 생성 (포지션 있을 때)
-        
-        Args:
-            data: 지표가 계산된 데이터프레임
-            trending: 추세장 여부 시리즈
-            position_open_price: 진입 가격 (손익 계산용)
-            
-        Returns:
-            매도 시그널 시리즈 (True/False)
-        """
+    def exit_signals(self, data: pd.DataFrame, position_open_price: Optional[float] = None) -> pd.Series:
+        """매도 신호 생성 (포지션 있을 때)"""
         sell_signals = pd.Series(False, index=data.index)
-        
-        # 시장 상태 변화 감지
-        state_change = self.detect_market_state_change(trending)
-        
+
+        if position_open_price is None:
+            return sell_signals
+
+        current_price = data['close']
+
+        condition_risk = atr_risk_exit_signal(
+            current_price=current_price,
+            entry_price=position_open_price,
+            atr_series=data['atr'],
+            stop_mult=0.8,
+            tp_mult=2.2
+        )
+
+        # 조건 B: MACD 히스토그램 음전환
+        condition_macd = macd_histogram_exit_signal(data)
+
+        # 조건 C: RSI 과매수 후 하락 반전
+        condition_rsi = rsi_overbought_reversal_exit_signal(data, self.rsi_overbought)
+
+        # 조건 D: 트레일링 스탑
+        condition_trailing = trailing_stop_exit_signal(
+            entry_price=position_open_price,
+            current_price=current_price,
+            fallback=0.013
+        )
+
         for i in range(1, len(data)):
-            # 시장 상태 변화 시 매도
-            if state_change.iloc[i]:
-                sell_signals.loc[data.index[i]] = True
+            if condition_risk.iloc[i]:
+                sell_signals.iloc[i] = True
                 continue
-            
-            # 전략별 매도 로직
-            if trending.iloc[i]:
-                # 추세장 매도 전략: 데드 크로스 또는 +DI < -DI
-                dead_cross = (data.loc[data.index[i], 'ma_short'] < data.loc[data.index[i], 'ma_long'] and 
-                             data.loc[data.index[i-1], 'ma_short'] >= data.loc[data.index[i-1], 'ma_long'])
-                
-                di_cross = (data.loc[data.index[i], 'plus_di'] < data.loc[data.index[i], 'minus_di'] and
-                           data.loc[data.index[i-1], 'plus_di'] >= data.loc[data.index[i-1], 'minus_di'])
-                
-                if dead_cross or di_cross:
-                    sell_signals.loc[data.index[i]] = True
-            else:
-                # 횡보장 매도 전략: 볼린저 상단 터치 또는 RSI 과매수
-                bb_top = data.loc[data.index[i], 'close'] >= data.loc[data.index[i], 'bb_upper']
-                rsi_overbought = data.loc[data.index[i], 'rsi'] > self.rsi_overbought
-                
-                if bb_top or rsi_overbought:
-                    sell_signals.loc[data.index[i]] = True
-            
-            # 손익 기반 매도 로직
-            if position_open_price:
-                current_price = data.loc[data.index[i], 'close']
-                profit_pct = (current_price - position_open_price) / position_open_price
-                
-                # 익절
-                if profit_pct >= self.take_profit:
-                    sell_signals.loc[data.index[i]] = True
-                
-                # 손절
-                if profit_pct <= -self.stop_loss:
-                    sell_signals.loc[data.index[i]] = True
-        
+            if condition_macd.iloc[i] or condition_rsi.iloc[i] or condition_trailing.iloc[i]:
+                sell_signals.iloc[i] = True
+
         return sell_signals
     
     def generate_signals(self, data: pd.DataFrame) -> Tuple[pd.Series, pd.Series, pd.Series]:
@@ -219,10 +212,10 @@ class AdaptivePositionStrategy:
         df = self.calculate_indicators(data)
         
         # 시장 상태 분석
-        trending, _, _ = self.analyze_market(df)
+        trending, _, _, trend_direction = self.analyze_market(df)
         
         # 매수/매도 신호 생성
-        buy_signals = self.entry_signals(df, trending)
-        sell_signals = self.exit_signals(df, trending)
+        buy_signals = self.entry_signals(df, trending, trend_direction)
+        sell_signals = self.exit_signals(df, trending, trend_direction)
         
-        return buy_signals, sell_signals, trending 
+        return buy_signals, sell_signals, trending

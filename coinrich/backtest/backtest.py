@@ -46,11 +46,12 @@ class Backtest:
         df = self.strategy.calculate_indicators(self.data)
         
         # 시장 상태 분석
-        trending, adx_values, bb_width = self.strategy.analyze_market(df)
+        trending, adx_values, bb_width, trend_direction = self.strategy.analyze_market(df)
         
         # 시장 상태 추가
         df['trending'] = trending
         df['market_state'] = trending.apply(lambda x: 'trending' if x else 'ranging')
+        df['trend_direction'] = trend_direction  # 추세 방향성 컬럼 추가
         
         # 결과 저장용 컬럼 추가 - 데이터 타입 명시
         df['position'] = 0  # 0: 미보유, 1: 매수 포지션
@@ -75,7 +76,7 @@ class Backtest:
             if df.loc[df.index[i-1], 'position'] == 0:
                 # 매수 전략 적용 (entry_signals)
                 entry_df = df.iloc[:i+1].copy()
-                buy_signal = self.strategy.entry_signals(entry_df, trending.iloc[:i+1]).iloc[-1]
+                buy_signal = self.strategy.entry_signals(entry_df).iloc[-1]
                 
                 if buy_signal:
                     # 매수 실행
@@ -113,7 +114,6 @@ class Backtest:
                 exit_df = df.iloc[:i+1].copy()
                 sell_signal = self.strategy.exit_signals(
                     exit_df, 
-                    trending.iloc[:i+1],
                     current_position['entry_price']
                 ).iloc[-1]
                 

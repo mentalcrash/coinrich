@@ -328,7 +328,7 @@ def is_trending_market(data: pd.DataFrame,
                        adx_threshold: float = 25.0, 
                        chop_threshold: float = 38.2,
                        adx_period: int = 14,
-                       chop_period: int = 14) -> pd.Series:
+                       chop_period: int = 14) -> tuple:
     """추세장 여부 판단
     
     ADX와 Choppiness Index를 기반으로 추세장 여부를 판단합니다.
@@ -342,10 +342,17 @@ def is_trending_market(data: pd.DataFrame,
         chop_period: Choppiness Index 계산 기간
         
     Returns:
-        추세장 여부 시리즈 (True/False), ADX 값, Choppiness Index 값
+        (trending, adx_values, chop_values, trend_direction):
+        - trending: 추세장 여부 시리즈 (True/False)
+        - adx_values: ADX 값 시리즈
+        - chop_values: Choppiness Index 값 시리즈
+        - trend_direction: 추세 방향 시리즈 (1: 상승추세, -1: 하락추세, None: 횡보장)
     """
-    # ADX 계산 (기간 전달)
-    adx_values = adx(data, period=adx_period)['adx']
+    # ADX 계산 (기간 전달) - +DI, -DI도 함께 받아옴
+    adx_result = adx(data, period=adx_period)
+    adx_values = adx_result['adx']
+    plus_di = adx_result['plus_di']
+    minus_di = adx_result['minus_di']
     
     # Choppiness Index 계산 (기간 전달)
     chop = choppiness_index(data, period=chop_period)
@@ -353,7 +360,19 @@ def is_trending_market(data: pd.DataFrame,
     # 추세장 판단 조건
     trending = (adx_values >= adx_threshold) & (chop <= chop_threshold)
     
-    return trending, adx_values, chop
+    # 추세 방향 판단 (상승/하락/횡보)
+    # 횡보장(trending=False)인 경우 None, 추세장인 경우 +DI와 -DI 비교하여 상승(1)/하락(-1) 판단
+    trend_direction = pd.Series(None, index=trending.index)
+    
+    # 상승/하락 판단
+    for i in range(len(trending)):
+        if trending.iloc[i]:
+            if plus_di.iloc[i] > minus_di.iloc[i]:
+                trend_direction.iloc[i] = 1  # 상승추세
+            else:
+                trend_direction.iloc[i] = -1  # 하락추세
+    
+    return trending, adx_values, chop, trend_direction
 
 
 def choppiness_index(data: pd.DataFrame, period: int = 14) -> pd.Series:
@@ -392,4 +411,4 @@ def choppiness_index(data: pd.DataFrame, period: int = 14) -> pd.Series:
     # Chop 계산
     chop = 100 * np.log10(atr_sum / price_range) / np.log10(period)
     
-    return chop 
+    return chop

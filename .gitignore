@@ -142,3 +142,4 @@ __pycache__/
 
 .venv
 charts/
+results/
